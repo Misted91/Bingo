@@ -8,13 +8,21 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <link rel="icon" type="image/x-icon" href="./icon.ico">
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="./css/base.css">
+    <link rel="stylesheet" href="./css/components.css">
+    <link rel="stylesheet" href="./css/lobby.css">
 
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
 
@@ -29,30 +37,28 @@
     <!-- Header -->
     <header>
         <div class="logo">
-            <i class="fa-solid fa-grip"></i>
+            <i data-lucide="grid-3x3"></i>
             <h1>Bingo<span>Online</span></h1>
         </div>
-        <div class="auth-area" id="authArea">
-            <!-- Auth UI injected here -->
-        </div>
+        <div class="auth-area" id="authArea"></div>
     </header>
 
     <!-- Main content -->
     <main id="mainContent">
 
         <!-- Auth gate (shown when not logged in) -->
-        <div id="authGate" class="auth-gate" style="display:none">
+        <div id="authGate" class="auth-gate hidden">
             <div class="gate-icon">🎱</div>
             <h2 class="section-title">Connecte-toi pour jouer</h2>
             <p class="section-sub">La connexion Google est requise pour créer ou rejoindre une partie</p>
-            <button class="btn-google" id="btnGoogleGate" onclick="signIn()">
+            <button class="btn-google" id="btnGoogleGate">
                 <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
                 Se connecter avec Google
             </button>
         </div>
 
         <!-- Lobby (shown when logged in, not in a room) -->
-        <div id="lobbySection" style="display:none">
+        <div id="lobbySection" class="hidden">
             <h2 class="section-title">Choisir une partie</h2>
             <p class="section-sub">Crée une room ou rejoins tes amis avec un code</p>
 
@@ -60,27 +66,27 @@
                 <!-- Create room -->
                 <div class="card">
                     <div class="card-icon">
-                        <i class="fa-solid fa-plus"></i>
+                        <i data-lucide="plus"></i>
                     </div>
                     <h2>Créer une room</h2>
                     <p>Lance une nouvelle partie et invite tes amis avec le code généré automatiquement.</p>
-                    <button class="btn btn-primary" id="btnCreate" onclick="createRoom()">
-                        <i class="fa-solid fa-rocket"></i>
+                    <button class="btn btn-primary" id="btnCreate">
+                        <i data-lucide="rocket"></i>
                         Créer la room
                     </button>
                 </div>
 
                 <!-- Join room -->
                 <div class="card">
-                    <div class="card-icon" style="background: linear-gradient(135deg, var(--accent), #0891b2);">
-                        <i class="fa-solid fa-door-open"></i>
+                    <div class="card-icon card-icon--accent">
+                        <i data-lucide="door-open"></i>
                     </div>
                     <h2>Rejoindre une room</h2>
                     <p>Entre le code de 6 lettres partagé par le créateur de la partie.</p>
                     <div class="input-group">
-                        <input type="text" id="roomCodeInput" placeholder="Ex: ABCDEF" maxlength="6" oninput="this.value=this.value.toUpperCase()">
-                        <button class="btn btn-accent" id="btnJoin" onclick="joinRoom()">
-                            <i class="fa-solid fa-right-to-bracket"></i>
+                        <input type="text" id="roomCodeInput" placeholder="Ex: ABCDEF" maxlength="6">
+                        <button class="btn btn-accent" id="btnJoin">
+                            <i data-lucide="log-in"></i>
                             Rejoindre
                         </button>
                     </div>
@@ -89,30 +95,30 @@
         </div>
 
         <!-- Waiting room -->
-        <div id="waitingRoom" class="waiting-room">
-            <a href="#" class="back-link" onclick="leaveRoom(); return false;">
-                <i class="fa-solid fa-arrow-left"></i> Quitter la room
+        <div id="waitingRoom" class="waiting-room hidden">
+            <a href="#" class="back-link" id="btnLeaveRoom">
+                <i data-lucide="arrow-left"></i> Quitter la room
             </a>
 
             <div class="room-code-display">
                 <p class="code-label">Code de la room</p>
                 <span class="code" id="displayedCode">------</span>
                 <p class="code-hint">Partage ce code avec tes amis !</p>
-                <button class="copy-btn" onclick="copyCode()">
-                    <i class="fa-solid fa-copy"></i> Copier le code
+                <button class="copy-btn" id="btnCopyCode">
+                    <i data-lucide="copy"></i> Copier le code
                 </button>
             </div>
 
             <div class="players-list">
-                <h3><i class="fa-solid fa-users"></i> Joueurs (<span id="playerCount">0</span>)</h3>
+                <h3><i data-lucide="users"></i> Joueurs (<span id="playerCount">0</span>)</h3>
                 <ul id="playersList"></ul>
             </div>
 
             <div class="waiting-actions">
-                <button class="btn btn-success" id="btnStart" onclick="startGame()" style="display:none">
-                    <i class="fa-solid fa-play"></i> Lancer la partie
+                <button class="btn btn-success hidden" id="btnStart">
+                    <i data-lucide="play"></i> Lancer la partie
                 </button>
-                <p id="waitingMsg" class="section-sub" style="margin:0"></p>
+                <p id="waitingMsg" class="section-sub waiting-msg--no-margin"></p>
             </div>
         </div>
 
@@ -122,6 +128,10 @@
 <!-- Toast -->
 <div id="toast"></div>
 
-<script src="app.js"></script>
+<script src="./js/firebase-config.js"></script>
+<script src="./js/ui-helpers.js"></script>
+<script src="./js/bingo-utils.js"></script>
+<script src="./js/auth.js"></script>
+<script src="./js/lobby.js"></script>
 </body>
 </html>

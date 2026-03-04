@@ -1,0 +1,303 @@
+/* ===== GAME STATUS BAR ===== */
+.game-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(20px);
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.game-status-bar .room-info { font-size: 0.9rem; color: var(--text-muted); }
+.game-status-bar .room-info span { color: var(--text); font-weight: 700; }
+.btn-draw-header { padding: 10px 20px; font-size: 0.9rem; }
+
+/* ===== GAME LAYOUT ===== */
+.game-layout {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 24px;
+}
+@media (max-width: 860px) {
+  .game-layout { grid-template-columns: 1fr; }
+}
+
+/* ===== BINGO GRID ===== */
+.bingo-header-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.bingo-letter {
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 900;
+  padding: 14px;
+  box-shadow: 0 4px 15px rgba(124,58,237,0.4);
+}
+.bingo-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+.bingo-cell {
+  aspect-ratio: 1;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+}
+.bingo-cell:hover:not(.marked):not(.free) {
+  background: rgba(124,58,237,0.15);
+  border-color: var(--primary);
+  transform: scale(1.05);
+}
+.bingo-cell.called {
+  border-color: var(--accent);
+  background: rgba(6,182,212,0.08);
+}
+.bingo-cell.marked {
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  border-color: var(--primary-light);
+  box-shadow: 0 0 20px rgba(124,58,237,0.5);
+  transform: scale(1.02);
+  cursor: default;
+}
+.bingo-cell.marked::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, rgba(255,255,255,0.2), transparent 70%);
+}
+.bingo-cell.free {
+  background: linear-gradient(135deg, var(--accent2), #059669);
+  border-color: var(--accent2);
+  box-shadow: 0 0 20px rgba(16,185,129,0.5);
+  cursor: default;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: white;
+}
+.bingo-cell.winning {
+  animation: winPulse 0.6s ease infinite alternate;
+}
+.bingo-actions {
+  margin-top: 12px;
+  text-align: center;
+}
+
+/* ===== SIDEBAR ===== */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.sidebar-panel {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(20px);
+  padding: 20px;
+}
+.sidebar-panel h3 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+}
+
+/* ===== CURRENT NUMBER ===== */
+.current-number {
+  font-size: 4rem;
+  font-weight: 900;
+  text-align: center;
+  background: linear-gradient(135deg, var(--primary-light), var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1;
+  padding: 10px 0;
+}
+.current-category {
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* ===== CALLED NUMBERS ===== */
+.called-numbers-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.called-badge {
+  padding: 4px 10px;
+  background: rgba(124,58,237,0.2);
+  border: 1px solid rgba(124,58,237,0.3);
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--primary-light);
+  animation: fadeIn 0.3s ease;
+}
+
+/* ===== PLAYERS STATUS ===== */
+.players-status { display: flex; flex-direction: column; gap: 8px; }
+.player-status-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  background: rgba(255,255,255,0.03);
+  border-radius: var(--radius-sm);
+}
+.player-status-item img { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--glass-border); }
+.player-status-item .ps-name { flex: 1; font-size: 0.9rem; font-weight: 600; }
+.player-status-item .ps-bingo {
+  padding: 2px 8px;
+  background: linear-gradient(135deg, var(--warn), #f97316);
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: white;
+}
+
+/* ===== WINNER OVERLAY ===== */
+#winner-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  z-index: 100;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(10px);
+}
+#winner-overlay.show { display: flex; }
+.winner-card {
+  text-align: center;
+  padding: 48px 40px;
+  background: var(--bg2);
+  border: 1px solid var(--glass-border);
+  border-radius: 24px;
+  max-width: 420px;
+  animation: popIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.winner-card .trophy { font-size: 5rem; margin-bottom: 16px; }
+.winner-card h2 { font-size: 2rem; font-weight: 900; margin-bottom: 8px; }
+.winner-card h2 span { color: var(--warn); }
+.winner-card p { color: var(--text-muted); margin-bottom: 24px; }
+.winner-card .winner-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+/* ===== CONFETTI ===== */
+.confetti-piece {
+  position: fixed;
+  width: 10px;
+  height: 14px;
+  border-radius: 2px;
+  top: -20px;
+  left: var(--confetti-left);
+  background: var(--confetti-bg);
+  animation: confettiFall var(--confetti-duration) linear forwards;
+  transform: rotate(var(--confetti-rotation));
+  z-index: 200;
+  pointer-events: none;
+}
+
+/* ===== RESPONSIVE GAME ===== */
+@media (max-width: 860px) {
+  .game-status-bar {
+    justify-content: center;
+    text-align: center;
+    padding: 12px 14px;
+  }
+  .game-status-bar .room-info { font-size: 0.85rem; }
+
+  .bingo-letter { font-size: 1.2rem; padding: 10px; }
+  .bingo-cell { font-size: 1.1rem; }
+
+  .sidebar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .sidebar-panel { padding: 16px; }
+  .current-number { font-size: 3rem; }
+
+  .winner-card { padding: 36px 28px; max-width: 360px; }
+  .winner-card .trophy { font-size: 4rem; }
+  .winner-card h2 { font-size: 1.6rem; }
+}
+
+@media (max-width: 640px) {
+  .game-status-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    border-radius: var(--radius-sm);
+  }
+  .game-status-bar .back-link { margin-bottom: 0; }
+  .btn-draw-header { width: 100%; justify-content: center; }
+
+  .bingo-header-row { gap: 4px; margin-bottom: 4px; }
+  .bingo-grid { gap: 4px; }
+  .bingo-letter { font-size: 1rem; padding: 8px; border-radius: 8px; }
+  .bingo-cell {
+    font-size: 0.95rem;
+    border-radius: 8px;
+  }
+  .bingo-cell.free { font-size: 0.6rem; }
+
+  .sidebar {
+    grid-template-columns: 1fr;
+  }
+  .sidebar-panel { padding: 14px; }
+  .current-number { font-size: 2.5rem; }
+  .called-numbers-list { max-height: 140px; }
+
+  .winner-card { padding: 28px 20px; margin: 12px; max-width: none; }
+  .winner-card .trophy { font-size: 3.5rem; margin-bottom: 12px; }
+  .winner-card h2 { font-size: 1.4rem; }
+  .winner-card p { font-size: 0.9rem; margin-bottom: 16px; }
+}
+
+@media (max-width: 400px) {
+  .game-status-bar { padding: 10px; }
+
+  .bingo-header-row { gap: 3px; margin-bottom: 3px; }
+  .bingo-grid { gap: 3px; }
+  .bingo-letter { font-size: 0.85rem; padding: 6px; border-radius: 6px; }
+  .bingo-cell {
+    font-size: 0.8rem;
+    border-radius: 6px;
+  }
+  .bingo-cell.free { font-size: 0.55rem; }
+
+  .current-number { font-size: 2rem; }
+  .player-status-item { padding: 6px; gap: 8px; }
+  .player-status-item img { width: 24px; height: 24px; }
+  .player-status-item .ps-name { font-size: 0.8rem; }
+}
