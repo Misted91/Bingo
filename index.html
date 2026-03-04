@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bingo Multijoueur – Lobby</title>
+    <meta name="description" content="Jouez au Bingo en ligne avec vos amis ! Créez ou rejoignez une room et amusez-vous.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+</head>
+<body>
+
+<!-- Background -->
+<div class="bg-orbs">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+</div>
+
+<div class="wrapper">
+    <!-- Header -->
+    <header>
+        <div class="logo">
+            <i class="fa-solid fa-grip"></i>
+            <h1>Bingo<span>Online</span></h1>
+        </div>
+        <div class="auth-area" id="authArea">
+            <!-- Auth UI injected here -->
+        </div>
+    </header>
+
+    <!-- Main content -->
+    <main id="mainContent">
+
+        <!-- Auth gate (shown when not logged in) -->
+        <div id="authGate" class="auth-gate" style="display:none">
+            <div class="gate-icon">🎱</div>
+            <h2 class="section-title">Connecte-toi pour jouer</h2>
+            <p class="section-sub">La connexion Google est requise pour créer ou rejoindre une partie</p>
+            <button class="btn-google" id="btnGoogleGate" onclick="signIn()">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
+                Se connecter avec Google
+            </button>
+        </div>
+
+        <!-- Lobby (shown when logged in, not in a room) -->
+        <div id="lobbySection" style="display:none">
+            <h2 class="section-title">Choisir une partie</h2>
+            <p class="section-sub">Crée une room ou rejoins tes amis avec un code</p>
+
+            <div class="lobby-grid">
+                <!-- Create room -->
+                <div class="card">
+                    <div class="card-icon">
+                        <i class="fa-solid fa-plus"></i>
+                    </div>
+                    <h2>Créer une room</h2>
+                    <p>Lance une nouvelle partie et invite tes amis avec le code généré automatiquement.</p>
+                    <button class="btn btn-primary" id="btnCreate" onclick="createRoom()">
+                        <i class="fa-solid fa-rocket"></i>
+                        Créer la room
+                    </button>
+                </div>
+
+                <!-- Join room -->
+                <div class="card">
+                    <div class="card-icon" style="background: linear-gradient(135deg, var(--accent), #0891b2);">
+                        <i class="fa-solid fa-door-open"></i>
+                    </div>
+                    <h2>Rejoindre une room</h2>
+                    <p>Entre le code de 6 lettres partagé par le créateur de la partie.</p>
+                    <div class="input-group">
+                        <input type="text" id="roomCodeInput" placeholder="Ex: ABCDEF" maxlength="6" oninput="this.value=this.value.toUpperCase()">
+                        <button class="btn btn-accent" id="btnJoin" onclick="joinRoom()">
+                            <i class="fa-solid fa-right-to-bracket"></i>
+                            Rejoindre
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Waiting room -->
+        <div id="waitingRoom" class="waiting-room">
+            <a href="#" class="back-link" onclick="leaveRoom(); return false;">
+                <i class="fa-solid fa-arrow-left"></i> Quitter la room
+            </a>
+
+            <div class="room-code-display">
+                <p class="code-label">Code de la room</p>
+                <span class="code" id="displayedCode">------</span>
+                <p class="code-hint">Partage ce code avec tes amis !</p>
+                <button class="copy-btn" onclick="copyCode()">
+                    <i class="fa-solid fa-copy"></i> Copier le code
+                </button>
+            </div>
+
+            <div class="players-list">
+                <h3><i class="fa-solid fa-users"></i> Joueurs (<span id="playerCount">0</span>)</h3>
+                <ul id="playersList"></ul>
+            </div>
+
+            <div class="waiting-actions">
+                <button class="btn btn-success" id="btnStart" onclick="startGame()" style="display:none">
+                    <i class="fa-solid fa-play"></i> Lancer la partie
+                </button>
+                <p id="waitingMsg" class="section-sub" style="margin:0"></p>
+            </div>
+        </div>
+
+    </main>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
