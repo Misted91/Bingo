@@ -61,13 +61,16 @@ body {
 
 /* ===== RESPONSIVE BASE ===== */
 @media (max-width: 768px) {
-  .wrapper { padding: 16px 12px; }
+  .wrapper { padding: 16px 14px; }
   .orb-1 { width: 300px; height: 300px; }
   .orb-2 { width: 250px; height: 250px; }
   .orb-3 { width: 180px; height: 180px; }
 }
 @media (max-width: 480px) {
-  .wrapper { padding: 10px 8px; }
+  .wrapper { padding: 12px 10px; }
+}
+@media (max-width: 360px) {
+  .wrapper { padding: 8px 6px; }
 }
 
 /* ===== KEYFRAMES ===== */
