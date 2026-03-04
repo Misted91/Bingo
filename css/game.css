@@ -21,9 +21,15 @@
   display: grid;
   grid-template-columns: 1fr 280px;
   gap: 24px;
+  align-items: start;
+}
+.bingo-section {
+  max-width: 560px;
+  width: 100%;
 }
 @media (max-width: 860px) {
-  .game-layout { grid-template-columns: 1fr; }
+  .game-layout { grid-template-columns: 1fr; gap: 16px; }
+  .bingo-section { max-width: 480px; margin: 0 auto; }
 }
 
 /* ===== BINGO GRID ===== */
