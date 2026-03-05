@@ -199,6 +199,21 @@ function listenToRoom() {
         const room = snap.data();
         const newCalled = room.calledNumbers || [];
 
+        // Detect ban
+        if (room.bannedUsers && room.bannedUsers.includes(currentUser?.uid)) {
+            showToast('Tu as été banni de cette room.', 'error');
+            sessionStorage.removeItem('bingo_session');
+            setTimeout(() => window.location.href = './index.html', 2000);
+            return;
+        }
+
+        // Detect host change
+        const wasHost = isHost;
+        isHost = room.host === currentUser?.uid;
+        if (isHost !== wasHost) {
+            applyGameHostUI();
+        }
+
         // Update settings in real-time (e.g. chat toggle)
         if (room.settings) {
             roomSettings = room.settings;
@@ -257,8 +272,44 @@ function listenToRoom() {
 function listenToPlayers() {
     playersListener = db.collection('bingo_rooms').doc(roomId)
         .collection('players').onSnapshot(snap => {
+            // Detect kick: current user no longer in players
+            const ids = snap.docs.map(d => d.id);
+            if (currentUser && !ids.includes(currentUser.uid)) {
+                showToast('Tu as été expulsé de la partie.', 'error');
+                sessionStorage.removeItem('bingo_session');
+                setTimeout(() => window.location.href = './index.html', 2000);
+                return;
+            }
             renderPlayersStatus(snap.docs);
         });
+}
+
+function applyGameHostUI() {
+    const hostPanel = document.getElementById('hostPanel');
+    const btnDraw = document.getElementById('btnDraw');
+    const btnDrawSidebar = document.getElementById('btnDrawSidebar');
+    const autoDrawInfo = document.getElementById('autoDrawInfo');
+
+    if (isHost) {
+        hostPanel.classList.remove('hidden');
+        if (roomSettings.drawMode === 'auto') {
+            btnDrawSidebar.classList.add('hidden');
+            btnDraw.classList.add('hidden');
+            autoDrawInfo.classList.remove('hidden');
+            startAutoDrawTimer();
+        } else {
+            btnDrawSidebar.classList.remove('hidden');
+            btnDraw.classList.remove('hidden');
+            autoDrawInfo.classList.add('hidden');
+            stopAutoDrawTimer();
+        }
+        showToast('Tu es maintenant l\'hôte de la partie', 'success');
+    } else {
+        hostPanel.classList.add('hidden');
+        btnDraw.classList.add('hidden');
+        stopAutoDrawTimer();
+    }
+    lucide.createIcons();
 }
 
 // ===== GRID RENDERING (MULTI-GRID) =====
