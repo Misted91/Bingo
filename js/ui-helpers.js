@@ -49,6 +49,7 @@ function showConfirmModal(msg, onOk, onCancel) {
     const close = () => overlay.classList.add('hidden');
     okBtn.onclick = () => { close(); if (onOk) onOk(); };
     cancelBtn.onclick = () => { close(); if (onCancel) onCancel(); };
+    overlay.onclick = (e) => { if (e.target === overlay) { close(); if (onCancel) onCancel(); } };
 }
 
 function initRgpdModal() {
@@ -58,4 +59,5 @@ function initRgpdModal() {
     if (!link || !modal) return;
     link.addEventListener('click', (e) => { e.preventDefault(); modal.classList.remove('hidden'); });
     if (closeBtn) closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
 }
