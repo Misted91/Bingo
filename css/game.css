@@ -408,6 +408,12 @@
   flex: 1;
   overflow: hidden;
   min-height: 0;
+  align-items: stretch;
+}
+.bingo-section {
+  overflow-y: auto;
+  min-height: 0;
+  max-height: 100%;
 }
 .bingo-grids-container {
   overflow-y: auto;
