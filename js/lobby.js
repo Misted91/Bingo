@@ -392,9 +392,20 @@ function showWaitingRoom() {
 // ===== ROOM MANAGEMENT =====
 
 function generateCode() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    // Syllable-based code: easy to say aloud and type (e.g. BAKO-METU)
+    const consonants = 'BDFGKLMNPRSTVZ';
+    const vowels = 'AEIOU';
     let code = '';
-    for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    for (let i = 0; i < 4; i++) {
+        code += consonants[Math.floor(Math.random() * consonants.length)];
+        code += vowels[Math.floor(Math.random() * vowels.length)];
+    }
+    return code; // 8 chars, e.g. BAKOMETU
+}
+
+function formatCode(code) {
+    // Display as BAKO-METU for readability
+    if (code.length === 8) return code.slice(0, 4) + '-' + code.slice(4);
     return code;
 }
 
@@ -436,8 +447,7 @@ async function createRoom() {
 
         sessionStorage.setItem('bingo_session', JSON.stringify({ roomId: currentRoomId, roomCode: currentRoomCode }));
 
-        document.getElementById('displayedCode').textContent = code;
-        document.getElementById('btnStart').classList.remove('hidden');
+        document.getElementById('displayedCode').textContent = formatCode(code);
         document.getElementById('waitingMsg').classList.add('hidden');
         document.getElementById('settingsPanel').classList.remove('hidden');
         document.getElementById('settingsPanel').classList.remove('settings-disabled');
@@ -445,7 +455,7 @@ async function createRoom() {
         showWaitingRoom();
         listenToRoom(roomRef.id);
         initChat(roomRef.id);
-        showToast('Room créée ! Code : ' + code, 'success');
+        showToast('Room créée ! Code : ' + formatCode(code), 'success');
     } catch (e) {
         console.error(e);
         showToast('Erreur : ' + e.message, 'error');
@@ -456,8 +466,8 @@ async function createRoom() {
 
 async function joinRoom() {
     if (!currentUser) { showToast('Connecte-toi d\'abord', 'error'); return; }
-    const code = document.getElementById('roomCodeInput').value.trim().toUpperCase();
-    if (code.length !== 6) { showToast('Code invalide (6 caractères)', 'error'); return; }
+    const code = document.getElementById('roomCodeInput').value.trim().toUpperCase().replace(/[^A-Z]/g, '');
+    if (code.length !== 8) { showToast('Code invalide (8 lettres)', 'error'); return; }
 
     const btn = document.getElementById('btnJoin');
     btn.disabled = true;
@@ -521,7 +531,7 @@ async function joinRoom() {
 
         sessionStorage.setItem('bingo_session', JSON.stringify({ roomId: currentRoomId, roomCode: currentRoomCode }));
 
-        document.getElementById('displayedCode').textContent = code;
+        document.getElementById('displayedCode').textContent = formatCode(code);
 
         const btnStart = document.getElementById('btnStart');
         document.getElementById('settingsPanel').classList.remove('hidden');
@@ -1086,7 +1096,7 @@ async function tryRejoinSession(savedRoomId, savedCode) {
         currentRoomId = savedRoomId;
         currentRoomCode = savedCode;
         isHost = room.host === currentUser.uid;
-        document.getElementById('displayedCode').textContent = savedCode;
+        document.getElementById('displayedCode').textContent = formatCode(savedCode);
         document.getElementById('settingsPanel').classList.remove('hidden');
         if (isHost) {
             document.getElementById('btnStart').classList.remove('hidden');
