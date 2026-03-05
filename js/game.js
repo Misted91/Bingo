@@ -9,7 +9,7 @@ let isHost = false;
 let myGrids = [];         // array of grid arrays (multi-grid support)
 let myMarkedGrids = [];   // array of marked arrays
 let calledNumbers = [];
-let roomSettings = { drawMode: 'manual', drawInterval: 10, gridCount: 1, patterns: ['line', 'column', 'diagonal'], calledAnimations: true, bingoValidation: 'auto', chatEnabled: true };
+let roomSettings = { drawMode: 'manual', drawInterval: 10, gridSize: 5, gridCount: 1, patterns: ['line', 'column', 'diagonal'], calledAnimations: true, bingoValidation: 'auto', chatEnabled: true };
 let roomListener = null;
 let playersListener = null;
 let bingoAlreadyClaimed = false;
@@ -95,9 +95,10 @@ async function initGame() {
 
         // Ensure we have enough grids for the configured gridCount
         const needed = roomSettings.gridCount || 1;
+        const gs = roomSettings.gridSize || 5;
         while (myGrids.length < needed) {
-            myGrids.push(generateBingoGrid());
-            myMarkedGrids.push(generateDefaultMarked());
+            myGrids.push(generateBingoGrid(gs));
+            myMarkedGrids.push(generateDefaultMarked(gs));
         }
 
         // Persist grids if we had to generate new ones
@@ -244,7 +245,13 @@ function renderAllGrids() {
     const container = document.getElementById('bingoGridsContainer');
     container.textContent = '';
 
+    const size = roomSettings.gridSize || 5;
     const count = Math.min(myGrids.length, roomSettings.gridCount || 1);
+    const letters = BINGO_LETTERS.slice(0, size);
+    const hasCenter = size % 2 === 1;
+    const centerR = Math.floor(size / 2);
+    const centerC = Math.floor(size / 2);
+
     for (let g = 0; g < count; g++) {
         const board = document.createElement('div');
         board.className = 'bingo-board';
@@ -259,7 +266,8 @@ function renderAllGrids() {
 
         const headerRow = document.createElement('div');
         headerRow.className = 'bingo-header-row';
-        ['B', 'I', 'N', 'G', 'O'].forEach(l => {
+        headerRow.style.gridTemplateColumns = 'repeat(' + size + ', 1fr)';
+        letters.forEach(l => {
             const letter = document.createElement('div');
             letter.className = 'bingo-letter';
             letter.textContent = l;
@@ -270,15 +278,16 @@ function renderAllGrids() {
         const gridEl = document.createElement('div');
         gridEl.className = 'bingo-grid';
         gridEl.id = 'bingoGrid-' + g;
+        gridEl.style.gridTemplateColumns = 'repeat(' + size + ', 1fr)';
 
-        for (let r = 0; r < 5; r++) {
-            for (let c = 0; c < 5; c++) {
+        for (let r = 0; r < size; r++) {
+            for (let c = 0; c < size; c++) {
                 const cell = document.createElement('div');
                 cell.className = 'bingo-cell';
                 cell.id = 'cell-' + g + '-' + r + '-' + c;
-                const idx = r * 5 + c;
+                const idx = r * size + c;
                 const num = myGrids[g][idx];
-                const isCenter = (r === 2 && c === 2);
+                const isCenter = hasCenter && r === centerR && c === centerC;
                 const isCalled = num !== 0 && calledNumbers.includes(num);
                 const isMarked = myMarkedGrids[g][idx];
 
@@ -305,13 +314,14 @@ function renderAllGrids() {
 }
 
 function highlightGridCalled() {
+    const size = roomSettings.gridSize || 5;
     const count = Math.min(myGrids.length, roomSettings.gridCount || 1);
     for (let g = 0; g < count; g++) {
-        for (let r = 0; r < 5; r++) {
-            for (let c = 0; c < 5; c++) {
+        for (let r = 0; r < size; r++) {
+            for (let c = 0; c < size; c++) {
                 const cell = document.getElementById('cell-' + g + '-' + r + '-' + c);
                 if (!cell) continue;
-                const idx = r * 5 + c;
+                const idx = r * size + c;
                 const num = myGrids[g][idx];
                 if (num !== 0 && calledNumbers.includes(num) && !myMarkedGrids[g][idx]) {
                     cell.classList.add('called');
@@ -322,11 +332,12 @@ function highlightGridCalled() {
 }
 
 function checkAutoMark(number) {
+    const size = roomSettings.gridSize || 5;
     const count = Math.min(myGrids.length, roomSettings.gridCount || 1);
     for (let g = 0; g < count; g++) {
-        for (let r = 0; r < 5; r++) {
-            for (let c = 0; c < 5; c++) {
-                const idx = r * 5 + c;
+        for (let r = 0; r < size; r++) {
+            for (let c = 0; c < size; c++) {
+                const idx = r * size + c;
                 if (myGrids[g][idx] === number && !myMarkedGrids[g][idx]) {
                     const cell = document.getElementById('cell-' + g + '-' + r + '-' + c);
                     if (cell && roomSettings.calledAnimations !== false) {
@@ -342,7 +353,8 @@ function checkAutoMark(number) {
 }
 
 async function markCell(gridIndex, r, c) {
-    const idx = r * 5 + c;
+    const size = roomSettings.gridSize || 5;
+    const idx = r * size + c;
     const num = myGrids[gridIndex][idx];
     if (num === 0) return;
     if (myMarkedGrids[gridIndex][idx]) return;
@@ -370,35 +382,46 @@ async function markCell(gridIndex, r, c) {
 // ===== BINGO DETECTION =====
 function checkBingoForGrid(marked, patterns) {
     const m = marked;
+    const size = roomSettings.gridSize || 5;
     const enabled = patterns || ['line', 'column', 'diagonal'];
 
     if (enabled.includes('line')) {
-        for (let r = 0; r < 5; r++) {
-            if (m[r * 5] && m[r * 5 + 1] && m[r * 5 + 2] && m[r * 5 + 3] && m[r * 5 + 4])
-                return { type: 'row', index: r };
+        for (let r = 0; r < size; r++) {
+            let full = true;
+            for (let c = 0; c < size; c++) { if (!m[r * size + c]) { full = false; break; } }
+            if (full) return { type: 'row', index: r };
         }
     }
 
     if (enabled.includes('column')) {
-        for (let c = 0; c < 5; c++) {
-            if (m[c] && m[5 + c] && m[10 + c] && m[15 + c] && m[20 + c])
-                return { type: 'col', index: c };
+        for (let c = 0; c < size; c++) {
+            let full = true;
+            for (let r = 0; r < size; r++) { if (!m[r * size + c]) { full = false; break; } }
+            if (full) return { type: 'col', index: c };
         }
     }
 
     if (enabled.includes('diagonal')) {
-        if (m[0] && m[6] && m[12] && m[18] && m[24]) return { type: 'diag', index: 0 };
-        if (m[4] && m[8] && m[12] && m[16] && m[20]) return { type: 'diag', index: 1 };
+        let d1 = true, d2 = true;
+        for (let i = 0; i < size; i++) {
+            if (!m[i * size + i]) d1 = false;
+            if (!m[i * size + (size - 1 - i)]) d2 = false;
+        }
+        if (d1) return { type: 'diag', index: 0 };
+        if (d2) return { type: 'diag', index: 1 };
     }
 
     if (enabled.includes('corners')) {
-        if (m[0] && m[4] && m[20] && m[24]) return { type: 'corners', index: 0 };
+        if (m[0] && m[size - 1] && m[(size - 1) * size] && m[size * size - 1])
+            return { type: 'corners', index: 0 };
     }
 
     if (enabled.includes('xPattern')) {
-        if (m[0] && m[6] && m[12] && m[18] && m[24] &&
-            m[4] && m[8] && m[16] && m[20])
-            return { type: 'xPattern', index: 0 };
+        let ok = true;
+        for (let i = 0; i < size; i++) {
+            if (!m[i * size + i] || !m[i * size + (size - 1 - i)]) { ok = false; break; }
+        }
+        if (ok) return { type: 'xPattern', index: 0 };
     }
 
     if (enabled.includes('fullCard')) {
@@ -427,25 +450,26 @@ function updateBingoButton() {
 }
 
 function highlightWinningCells(bingo) {
+    const size = roomSettings.gridSize || 5;
     const g = bingo.gridIndex !== undefined ? bingo.gridIndex : 0;
     const cells = [];
     if (bingo.type === 'row') {
-        for (let c = 0; c < 5; c++) cells.push('cell-' + g + '-' + bingo.index + '-' + c);
+        for (let c = 0; c < size; c++) cells.push('cell-' + g + '-' + bingo.index + '-' + c);
     } else if (bingo.type === 'col') {
-        for (let r = 0; r < 5; r++) cells.push('cell-' + g + '-' + r + '-' + bingo.index);
+        for (let r = 0; r < size; r++) cells.push('cell-' + g + '-' + r + '-' + bingo.index);
     } else if (bingo.type === 'diag') {
-        if (bingo.index === 0) for (let i = 0; i < 5; i++) cells.push('cell-' + g + '-' + i + '-' + i);
-        else for (let i = 0; i < 5; i++) cells.push('cell-' + g + '-' + i + '-' + (4 - i));
+        if (bingo.index === 0) for (let i = 0; i < size; i++) cells.push('cell-' + g + '-' + i + '-' + i);
+        else for (let i = 0; i < size; i++) cells.push('cell-' + g + '-' + i + '-' + (size - 1 - i));
     } else if (bingo.type === 'corners') {
-        ['0-0', '0-4', '4-0', '4-4'].forEach(pos => cells.push('cell-' + g + '-' + pos));
+        cells.push('cell-' + g + '-0-0', 'cell-' + g + '-0-' + (size-1), 'cell-' + g + '-' + (size-1) + '-0', 'cell-' + g + '-' + (size-1) + '-' + (size-1));
     } else if (bingo.type === 'xPattern') {
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < size; i++) {
             cells.push('cell-' + g + '-' + i + '-' + i);
-            cells.push('cell-' + g + '-' + i + '-' + (4 - i));
+            cells.push('cell-' + g + '-' + i + '-' + (size - 1 - i));
         }
     } else if (bingo.type === 'fullCard') {
-        for (let r = 0; r < 5; r++)
-            for (let c = 0; c < 5; c++)
+        for (let r = 0; r < size; r++)
+            for (let c = 0; c < size; c++)
                 cells.push('cell-' + g + '-' + r + '-' + c);
     }
     cells.forEach(id => {
@@ -490,7 +514,8 @@ async function claimBingo() {
 // ===== NUMBER DRAWING =====
 async function drawNumber() {
     if (!isHost || isDrawing) return;
-    if (calledNumbers.length >= 75) {
+    const maxNum = getMaxNumber(roomSettings.gridSize);
+    if (calledNumbers.length >= maxNum) {
         showToast('Tous les numéros ont été tirés !', 'info');
         stopAutoDrawTimer();
         return;
@@ -506,7 +531,7 @@ async function drawNumber() {
     try {
         let number;
         do {
-            number = Math.floor(Math.random() * 75) + 1;
+            number = Math.floor(Math.random() * maxNum) + 1;
         } while (calledNumbers.includes(number));
 
         await db.collection('bingo_rooms').doc(roomId).update({
@@ -553,6 +578,8 @@ function renderCalledNumbers() {
 
 function updateCalledCount() {
     document.getElementById('statusCount').textContent = calledNumbers.length;
+    const totalEl = document.getElementById('statusTotal');
+    if (totalEl) totalEl.textContent = getMaxNumber(roomSettings.gridSize);
 }
 
 function renderPlayersStatus(playerDocs) {
@@ -589,23 +616,23 @@ function handleGameFinished(room) {
     stopAutoDrawTimer();
     sessionStorage.removeItem('bingo_session');
 
-    // Schedule auto-cleanup after 1 minute (host only)
-    if (isHost) {
-        setTimeout(async () => {
-            try {
-                const snap = await db.collection('bingo_rooms').doc(roomId).get();
-                if (snap.exists && snap.data().status === 'finished') {
-                    const playersSnap = await db.collection('bingo_rooms').doc(roomId).collection('players').get();
-                    const batch = db.batch();
-                    playersSnap.docs.forEach(doc => batch.delete(doc.ref));
-                    const messagesSnap = await db.collection('bingo_rooms').doc(roomId).collection('messages').get();
-                    messagesSnap.docs.forEach(doc => batch.delete(doc.ref));
-                    batch.delete(db.collection('bingo_rooms').doc(roomId));
-                    await batch.commit();
-                }
-            } catch (e) { console.error('Auto-cleanup error:', e); }
-        }, 60000);
-    }
+    // Schedule auto-cleanup after 1 minute (any client triggers it)
+    setTimeout(async () => {
+        try {
+            const snap = await db.collection('bingo_rooms').doc(roomId).get();
+            if (snap.exists && snap.data().status === 'finished') {
+                const batch = db.batch();
+                const playersSnap = await db.collection('bingo_rooms').doc(roomId).collection('players').get();
+                playersSnap.docs.forEach(doc => batch.delete(doc.ref));
+                const messagesSnap = await db.collection('bingo_rooms').doc(roomId).collection('messages').get();
+                messagesSnap.docs.forEach(doc => batch.delete(doc.ref));
+                const typingSnap = await db.collection('bingo_rooms').doc(roomId).collection('typing').get();
+                typingSnap.docs.forEach(doc => batch.delete(doc.ref));
+                batch.delete(db.collection('bingo_rooms').doc(roomId));
+                await batch.commit();
+            }
+        } catch (e) { console.error('Auto-cleanup error:', e); }
+    }, 60000);
 
     const overlay = document.getElementById('winner-overlay');
     const title = document.getElementById('winnerTitle');

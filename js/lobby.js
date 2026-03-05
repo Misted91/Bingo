@@ -17,6 +17,7 @@ let typingDocRef = null;
 let settingsData = {
     drawMode: 'manual',
     drawInterval: 10,
+    gridSize: 5,
     gridCount: 1,
     patterns: ['line', 'column', 'diagonal'],
     calledAnimations: true,
@@ -30,7 +31,6 @@ let settingsData = {
 document.addEventListener('DOMContentLoaded', () => {
     lucide.createIcons();
 
-    document.getElementById('btnGoogleGate').addEventListener('click', signIn);
     document.getElementById('btnCreate').addEventListener('click', createRoom);
     document.getElementById('btnJoin').addEventListener('click', joinRoom);
     document.getElementById('btnLeaveRoom').addEventListener('click', (e) => {
@@ -99,6 +99,16 @@ function initSettingsUI() {
         document.querySelectorAll('#gridCountBtns .count-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         settingsData.gridCount = parseInt(btn.dataset.count);
+        saveSettings();
+    });
+
+    // Grid size buttons
+    document.getElementById('gridSizeBtns').addEventListener('click', (e) => {
+        const btn = e.target.closest('.count-btn');
+        if (!btn) return;
+        document.querySelectorAll('#gridSizeBtns .count-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        settingsData.gridSize = parseInt(btn.dataset.size);
         saveSettings();
     });
 
@@ -219,6 +229,13 @@ function applySettingsToUI(settings) {
         b.classList.toggle('active', parseInt(b.dataset.count) === settings.gridCount);
     });
 
+    // Grid size
+    if (settings.gridSize) {
+        document.querySelectorAll('#gridSizeBtns .count-btn').forEach(b => {
+            b.classList.toggle('active', parseInt(b.dataset.size) === settings.gridSize);
+        });
+    }
+
     // Patterns
     if (settings.patterns) {
         document.querySelectorAll('#patternsGrid input[name="pattern"]').forEach(cb => {
@@ -305,11 +322,12 @@ async function createRoom() {
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
+        const gs = settingsData.gridSize || 5;
         await roomRef.collection('players').doc(currentUser.uid).set({
             name: currentUser.displayName,
             photoURL: currentUser.photoURL || '',
-            grid: generateBingoGrid(),
-            marked: generateDefaultMarked(),
+            grid: generateBingoGrid(gs),
+            marked: generateDefaultMarked(gs),
             hasBingo: false,
             joinedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
@@ -381,11 +399,12 @@ async function joinRoom() {
             return;
         }
 
+        const gs = (room.settings && room.settings.gridSize) || 5;
         await roomDoc.ref.collection('players').doc(currentUser.uid).set({
             name: currentUser.displayName,
             photoURL: currentUser.photoURL || '',
-            grid: generateBingoGrid(),
-            marked: generateDefaultMarked(),
+            grid: generateBingoGrid(gs),
+            marked: generateDefaultMarked(gs),
             hasBingo: false,
             joinedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
@@ -453,7 +472,7 @@ function listenToRoom(roomId) {
             }
 
             // Schedule cleanup when game finishes
-            if (room.status === 'finished' && isHost) {
+            if (room.status === 'finished') {
                 scheduleRoomCleanup(roomId);
             }
 
@@ -467,8 +486,8 @@ function listenToRoom(roomId) {
     playersListener = db.collection('bingo_rooms').doc(roomId).collection('players')
         .onSnapshot((snap) => {
             renderPlayers(snap.docs, cachedHost);
-            // If all players left, schedule cleanup (host triggers it)
-            if (snap.docs.length === 0 && isHost) {
+            // If all players left, schedule cleanup (any remaining client handles it)
+            if (snap.docs.length === 0) {
                 scheduleRoomCleanup(roomId);
             }
         });
@@ -540,13 +559,15 @@ async function startGame() {
 
 async function leaveRoom() {
     if (!currentRoomId || !currentUser) { leaveRoomLocal(); return; }
+    const roomIdToClean = currentRoomId;
     try {
         await db.collection('bingo_rooms').doc(currentRoomId)
             .collection('players').doc(currentUser.uid).delete();
 
-        const roomSnap = await db.collection('bingo_rooms').doc(currentRoomId).get();
-        if (roomSnap.exists && roomSnap.data().host === currentUser.uid) {
-            await db.collection('bingo_rooms').doc(currentRoomId).delete();
+        // Check if room is now empty — schedule cleanup regardless of host status
+        const remainingSnap = await db.collection('bingo_rooms').doc(roomIdToClean).collection('players').get();
+        if (remainingSnap.empty) {
+            scheduleRoomCleanup(roomIdToClean);
         }
     } catch (e) {
         console.error('leaveRoom error:', e);
@@ -675,8 +696,9 @@ function scheduleRoomCleanup(roomId) {
             const roomSnap = await db.collection('bingo_rooms').doc(roomId).get();
             if (!roomSnap.exists) return;
             const room = roomSnap.data();
-            // Only delete if still finished or if empty
-            if (room.status === 'finished') {
+            // Delete if finished, or if room is empty
+            const playersSnap = await db.collection('bingo_rooms').doc(roomId).collection('players').get();
+            if (room.status === 'finished' || playersSnap.empty) {
                 await deleteRoomAndSubcollections(roomId);
             }
         } catch (e) {
@@ -687,11 +709,13 @@ function scheduleRoomCleanup(roomId) {
 
 async function deleteRoomAndSubcollections(roomId) {
     try {
-        const playersSnap = await db.collection('bingo_rooms').doc(roomId).collection('players').get();
         const batch = db.batch();
+        const playersSnap = await db.collection('bingo_rooms').doc(roomId).collection('players').get();
         playersSnap.docs.forEach(doc => batch.delete(doc.ref));
         const messagesSnap = await db.collection('bingo_rooms').doc(roomId).collection('messages').get();
         messagesSnap.docs.forEach(doc => batch.delete(doc.ref));
+        const typingSnap = await db.collection('bingo_rooms').doc(roomId).collection('typing').get();
+        typingSnap.docs.forEach(doc => batch.delete(doc.ref));
         batch.delete(db.collection('bingo_rooms').doc(roomId));
         await batch.commit();
     } catch (e) {

@@ -53,11 +53,7 @@
         <div id="authGate" class="auth-gate hidden">
             <div class="gate-icon">🎱</div>
             <h2 class="section-title">Connecte-toi pour jouer</h2>
-            <p class="section-sub">La connexion Google est requise pour créer ou rejoindre une partie</p>
-            <button class="btn-google" id="btnGoogleGate">
-                <svg class="google-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" fill="currentColor"/></svg>
-                Se connecter avec Google
-            </button>
+            <p class="section-sub">Utilise le bouton de connexion dans la barre en haut pour commencer</p>
         </div>
 
         <!-- Lobby (shown when logged in, not in a room) -->
@@ -186,6 +182,18 @@
                         <button class="count-btn active" data-count="1" type="button">1</button>
                         <button class="count-btn" data-count="2" type="button">2</button>
                         <button class="count-btn" data-count="3" type="button">3</button>
+                        <button class="count-btn" data-count="4" type="button">4</button>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-label">Taille de la grille</label>
+                    <div class="count-btns" id="gridSizeBtns">
+                        <button class="count-btn" data-size="3" type="button">3×3</button>
+                        <button class="count-btn" data-size="4" type="button">4×4</button>
+                        <button class="count-btn active" data-size="5" type="button">5×5</button>
+                        <button class="count-btn" data-size="6" type="button">6×6</button>
+                        <button class="count-btn" data-size="7" type="button">7×7</button>
                     </div>
                 </div>
 

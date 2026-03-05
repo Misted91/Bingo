@@ -3,27 +3,41 @@
  * Shared by lobby (grid gen) and game (letter helpers)
  */
 
-function generateBingoGrid() {
-    const ranges = [[1, 15], [16, 30], [31, 45], [46, 60], [61, 75]];
+const BINGO_LETTERS = ['B', 'I', 'N', 'G', 'O', 'S', 'T'];
+
+function generateBingoGrid(size) {
+    size = size || 5;
     const cols = [];
-    for (let col = 0; col < 5; col++) {
-        const [min, max] = ranges[col];
-        cols.push(shuffle(range(min, max)).slice(0, 5));
+    for (let col = 0; col < size; col++) {
+        const min = col * 15 + 1;
+        const max = col * 15 + 15;
+        cols.push(shuffle(range(min, max)).slice(0, size));
     }
     const flat = [];
-    for (let row = 0; row < 5; row++) {
-        for (let col = 0; col < 5; col++) {
+    for (let row = 0; row < size; row++) {
+        for (let col = 0; col < size; col++) {
             flat.push(cols[col][row]);
         }
     }
-    flat[12] = 0; // FREE center
+    // FREE center for odd sizes
+    if (size % 2 === 1) {
+        const center = Math.floor(size * size / 2);
+        flat[center] = 0;
+    }
     return flat;
 }
 
-function generateDefaultMarked() {
-    const m = new Array(25).fill(false);
-    m[12] = true;
+function generateDefaultMarked(size) {
+    size = size || 5;
+    const m = new Array(size * size).fill(false);
+    if (size % 2 === 1) {
+        m[Math.floor(size * size / 2)] = true;
+    }
     return m;
+}
+
+function getMaxNumber(size) {
+    return (size || 5) * 15;
 }
 
 function range(min, max) {
@@ -41,15 +55,12 @@ function shuffle(arr) {
     return a;
 }
 
-function getBingoLetter(n) {
-    if (n <= 15) return 'B';
-    if (n <= 30) return 'I';
-    if (n <= 45) return 'N';
-    if (n <= 60) return 'G';
-    return 'O';
+function getBingoLetter(n, size) {
+    const idx = Math.floor((n - 1) / 15);
+    return BINGO_LETTERS[idx] || '?';
 }
 
 function getBingoCategory(n) {
-    const letters = ['B', 'I', 'N', 'G', 'O'];
-    return letters[Math.floor((n - 1) / 15)];
+    const idx = Math.floor((n - 1) / 15);
+    return BINGO_LETTERS[idx] || '?';
 }
