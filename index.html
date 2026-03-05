@@ -114,6 +114,94 @@
                 <ul id="playersList"></ul>
             </div>
 
+            <!-- Game settings (host only) -->
+            <div class="settings-panel hidden" id="settingsPanel">
+                <h3><i data-lucide="sliders-horizontal"></i> Paramètres de la partie</h3>
+
+                <div class="setting-group">
+                    <label class="setting-label">Mode de tirage</label>
+                    <div class="toggle-group" id="drawModeToggle">
+                        <button class="toggle-btn active" data-value="manual" type="button">
+                            <i data-lucide="hand"></i> Manuel
+                        </button>
+                        <button class="toggle-btn" data-value="auto" type="button">
+                            <i data-lucide="timer"></i> Automatique
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-group hidden" id="intervalGroup">
+                    <label class="setting-label">Intervalle entre les tirages</label>
+                    <div class="range-wrapper">
+                        <input type="range" min="3" max="60" value="10" step="1" id="drawIntervalRange">
+                        <span class="range-value" id="intervalValue">10s</span>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-label">Nombre de grilles par joueur</label>
+                    <div class="count-btns" id="gridCountBtns">
+                        <button class="count-btn active" data-count="1" type="button">1</button>
+                        <button class="count-btn" data-count="2" type="button">2</button>
+                        <button class="count-btn" data-count="3" type="button">3</button>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-label">Patterns gagnants</label>
+                    <div class="patterns-grid" id="patternsGrid">
+                        <label class="pattern-option">
+                            <input type="checkbox" name="pattern" value="line" checked>
+                            <div class="pattern-card">
+                                <div class="pattern-mini" data-pattern="line"></div>
+                                <span>Ligne</span>
+                            </div>
+                        </label>
+                        <label class="pattern-option">
+                            <input type="checkbox" name="pattern" value="column" checked>
+                            <div class="pattern-card">
+                                <div class="pattern-mini" data-pattern="column"></div>
+                                <span>Colonne</span>
+                            </div>
+                        </label>
+                        <label class="pattern-option">
+                            <input type="checkbox" name="pattern" value="diagonal" checked>
+                            <div class="pattern-card">
+                                <div class="pattern-mini" data-pattern="diagonal"></div>
+                                <span>Diagonale</span>
+                            </div>
+                        </label>
+                        <label class="pattern-option">
+                            <input type="checkbox" name="pattern" value="corners">
+                            <div class="pattern-card">
+                                <div class="pattern-mini" data-pattern="corners"></div>
+                                <span>4 Coins</span>
+                            </div>
+                        </label>
+                        <label class="pattern-option">
+                            <input type="checkbox" name="pattern" value="fullCard">
+                            <div class="pattern-card">
+                                <div class="pattern-mini" data-pattern="fullCard"></div>
+                                <span>Carton plein</span>
+                            </div>
+                        </label>
+                        <label class="pattern-option">
+                            <input type="checkbox" name="pattern" value="xPattern">
+                            <div class="pattern-card">
+                                <div class="pattern-mini" data-pattern="xPattern"></div>
+                                <span>Croix (X)</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings summary (non-host) -->
+            <div class="settings-summary hidden" id="settingsSummary">
+                <h3><i data-lucide="sliders-horizontal"></i> Paramètres de la partie</h3>
+                <div class="summary-content" id="summaryContent"></div>
+            </div>
+
             <div class="waiting-actions">
                 <button class="btn btn-success hidden" id="btnStart">
                     <i data-lucide="play"></i> Lancer la partie
