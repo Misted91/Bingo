@@ -27,9 +27,22 @@
   max-width: 560px;
   width: 100%;
 }
+.bingo-section:has(.bingo-grids-container[data-grid-count="2"]),
+.bingo-section:has(.bingo-grids-container[data-grid-count="3"]),
+.bingo-section:has(.bingo-grids-container[data-grid-count="4"]) {
+  max-width: none;
+}
+.bingo-grids-container[data-grid-count="2"] ~ .bingo-actions,
+.bingo-grids-container[data-grid-count="3"] ~ .bingo-actions,
+.bingo-grids-container[data-grid-count="4"] ~ .bingo-actions { margin-top: 8px; }
 @media (max-width: 860px) {
   .game-layout { grid-template-columns: 1fr; gap: 16px; }
   .bingo-section { max-width: 480px; margin: 0 auto; }
+  .bingo-section:has(.bingo-grids-container[data-grid-count="2"]),
+  .bingo-section:has(.bingo-grids-container[data-grid-count="3"]),
+  .bingo-section:has(.bingo-grids-container[data-grid-count="4"]) {
+    max-width: 100%;
+  }
 }
 
 /* ===== BINGO GRID ===== */
@@ -222,10 +235,46 @@
 
 /* ===== MULTI-GRID CONTAINER ===== */
 .bingo-grids-container {
-  display: flex;
-  flex-direction: column;
-  gap: 32px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
 }
+.bingo-grids-container[data-grid-count="2"],
+.bingo-grids-container[data-grid-count="3"],
+.bingo-grids-container[data-grid-count="4"] {
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.bingo-grids-container[data-grid-count="3"] .bingo-board:last-child {
+  grid-column: 1 / -1;
+  max-width: 50%;
+  justify-self: center;
+}
+
+/* Multi-grid: scale down cells */
+.bingo-grids-container[data-grid-count="2"] .bingo-letter,
+.bingo-grids-container[data-grid-count="3"] .bingo-letter,
+.bingo-grids-container[data-grid-count="4"] .bingo-letter {
+  font-size: 0.85rem;
+  padding: 6px;
+}
+.bingo-grids-container[data-grid-count="2"] .bingo-cell,
+.bingo-grids-container[data-grid-count="3"] .bingo-cell,
+.bingo-grids-container[data-grid-count="4"] .bingo-cell {
+  font-size: 0.85rem;
+}
+.bingo-grids-container[data-grid-count="2"] .bingo-header-row,
+.bingo-grids-container[data-grid-count="3"] .bingo-header-row,
+.bingo-grids-container[data-grid-count="4"] .bingo-header-row {
+  gap: 3px;
+  margin-bottom: 3px;
+}
+.bingo-grids-container[data-grid-count="2"] .bingo-grid,
+.bingo-grids-container[data-grid-count="3"] .bingo-grid,
+.bingo-grids-container[data-grid-count="4"] .bingo-grid {
+  gap: 3px;
+}
+
 .bingo-board-label {
   text-align: center;
   font-size: 0.85rem;
@@ -233,7 +282,7 @@
   letter-spacing: 2px;
   color: var(--text-muted);
   font-weight: 700;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 /* ===== AUTO-DRAW INFO ===== */
@@ -317,6 +366,33 @@
   .game-status-bar .back-link { margin-bottom: 0; }
   .game-status-bar .room-info { font-size: 0.8rem; }
   .btn-draw-header { width: 100%; justify-content: center; }
+
+  /* Multi-grid: even smaller cells on mobile */
+  .bingo-grids-container[data-grid-count="2"] .bingo-letter,
+  .bingo-grids-container[data-grid-count="3"] .bingo-letter,
+  .bingo-grids-container[data-grid-count="4"] .bingo-letter {
+    font-size: 0.65rem;
+    padding: 3px;
+  }
+  .bingo-grids-container[data-grid-count="2"] .bingo-cell,
+  .bingo-grids-container[data-grid-count="3"] .bingo-cell,
+  .bingo-grids-container[data-grid-count="4"] .bingo-cell {
+    font-size: 0.65rem;
+  }
+  .bingo-grids-container[data-grid-count="2"] .bingo-header-row,
+  .bingo-grids-container[data-grid-count="3"] .bingo-header-row,
+  .bingo-grids-container[data-grid-count="4"] .bingo-header-row,
+  .bingo-grids-container[data-grid-count="2"] .bingo-grid,
+  .bingo-grids-container[data-grid-count="3"] .bingo-grid,
+  .bingo-grids-container[data-grid-count="4"] .bingo-grid {
+    gap: 2px;
+  }
+  .bingo-grids-container[data-grid-count="2"],
+  .bingo-grids-container[data-grid-count="3"],
+  .bingo-grids-container[data-grid-count="4"] {
+    gap: 8px;
+  }
+  .bingo-board-label { font-size: 0.7rem; letter-spacing: 1px; margin-bottom: 4px; }
 
   .bingo-header-row { gap: 4px; margin-bottom: 4px; }
   .bingo-grid { gap: 4px; }
@@ -435,7 +511,6 @@
   max-height: 100%;
 }
 .bingo-grids-container {
-  overflow-y: auto;
   max-height: 100%;
 }
 .sidebar {

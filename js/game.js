@@ -438,6 +438,7 @@ function renderAllGrids() {
 
     const size = roomSettings.gridSize || 5;
     const count = Math.min(myGrids.length, roomSettings.gridCount || 1);
+    container.dataset.gridCount = count;
     const letters = BINGO_LETTERS.slice(0, size);
     const hasCenter = size % 2 === 1;
     const centerR = Math.floor(size / 2);
@@ -1185,6 +1186,7 @@ function renderSpectatorGrid(playerData) {
     const markedMap = playerData.markedMap || {};
     const size = roomSettings.gridSize || 5;
     const count = roomSettings.gridCount || 1;
+    container.dataset.gridCount = count;
     const letters = BINGO_LETTERS.slice(0, size);
     const hasCenter = size % 2 === 1;
     const centerR = Math.floor(size / 2);
