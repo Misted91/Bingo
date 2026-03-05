@@ -10,6 +10,13 @@ auth.onAuthStateChanged(user => {
     renderAuthArea(user);
     if (user) {
         showLobby();
+        const saved = sessionStorage.getItem('bingo_session');
+        if (saved) {
+            try {
+                const { roomId: savedRoomId, roomCode } = JSON.parse(saved);
+                tryRejoinSession(savedRoomId, roomCode);
+            } catch(e) { sessionStorage.removeItem('bingo_session'); }
+        }
     } else {
         showAuthGate();
     }
