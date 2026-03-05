@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bingo Multijoueur - Lobby</title>
+    <title>BingOnline - Lobby</title>
     <meta name="description" content="Jouez au Bingo en ligne avec vos amis ! Créez ou rejoignez une room et amusez-vous.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -38,7 +38,7 @@
     <header>
         <div class="logo">
             <i data-lucide="grid-3x3"></i>
-            <h1>Bingo<span>Online</span></h1>
+            <h1>Bing<span>Online</span></h1>
         </div>
         <div class="auth-area" id="authArea"></div>
     </header>
@@ -148,6 +148,31 @@
                 </div>
 
                 <div class="setting-group">
+                    <label class="setting-label">Animations sur les numéros tirés</label>
+                    <div class="toggle-group" id="calledAnimToggle">
+                        <button class="toggle-btn active" data-value="true" type="button">
+                            <i data-lucide="sparkles"></i> Activées
+                        </button>
+                        <button class="toggle-btn" data-value="false" type="button">
+                            <i data-lucide="zap-off"></i> Désactivées
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-label">Validation du Bingo</label>
+                    <div class="toggle-group" id="bingoValidationToggle">
+                        <button class="toggle-btn active" data-value="auto" type="button">
+                            <i data-lucide="zap"></i> Auto
+                        </button>
+                        <button class="toggle-btn" data-value="manual" type="button">
+                            <i data-lucide="hand"></i> Manuel (vote)
+                        </button>
+                    </div>
+                    <p class="setting-hint">En mode manuel, l'hôte valide ou rejette chaque réclamation de Bingo.</p>
+                </div>
+
+                <div class="setting-group">
                     <label class="setting-label">Patterns gagnants</label>
                     <div class="patterns-grid" id="patternsGrid">
                         <label class="pattern-option">
@@ -208,9 +233,40 @@
                 </button>
                 <p id="waitingMsg" class="section-sub waiting-msg--no-margin"></p>
             </div>
+
+            <!-- Chat -->
+            <div class="chat-panel" id="chatPanel">
+                <h3><i data-lucide="message-circle"></i> Chat</h3>
+                <div class="chat-messages" id="chatMessages"></div>
+                <div class="chat-input-row">
+                    <input type="text" id="chatInput" placeholder="Écrire un message..." maxlength="200" autocomplete="off">
+                    <button class="btn btn-primary chat-send-btn" id="chatSendBtn" type="button">
+                        <i data-lucide="send"></i>
+                    </button>
+                </div>
+            </div>
         </div>
 
     </main>
+
+    <footer class="rgpd-footer">
+        <p>En utilisant BingOnline, vous acceptez que vos données Google (nom, photo) soient utilisées pour la session de jeu uniquement. Aucune donnée n'est vendue ni partagée. <a href="#" id="rgpdLink">En savoir plus</a></p>
+    </footer>
+</div>
+
+<!-- RGPD Modal -->
+<div id="rgpdModal" class="modal-overlay hidden">
+  <div class="modal-card">
+    <h3 style="margin-bottom:12px;">🔒 Confidentialité</h3>
+    <p style="color:var(--text-muted);font-size:0.9rem;line-height:1.6;margin-bottom:16px;">
+      BingOnline utilise Firebase Authentication (Google) pour vous identifier. Votre nom d'affichage et photo de profil sont stockés temporairement dans Firestore uniquement le temps de la partie.<br><br>
+      Aucune donnée n'est partagée avec des tiers. Les messages du chat sont stockés dans la room de jeu et supprimés avec celle-ci.<br><br>
+      Aucun cookie publicitaire ou traceur n'est utilisé.
+    </p>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="rgpdModalClose">Fermer</button>
+    </div>
+  </div>
 </div>
 
 <!-- Toast -->

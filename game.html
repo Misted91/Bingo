@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bingo - En partie !</title>
+    <title>BingOnline - En partie !</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
@@ -23,7 +23,7 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
-<body>
+<body class="game-page-body">
 
     <!-- Background -->
     <div class="bg-orbs">
@@ -44,7 +44,7 @@
             <header>
                 <div class="logo">
                     <i data-lucide="grid-3x3"></i>
-                    <h1>Bingo<span>Online</span></h1>
+                    <h1>Bing<span>Online</span></h1>
                 </div>
                 <div class="auth-area" id="authArea"></div>
             </header>
@@ -97,6 +97,13 @@
                             <div class="auto-draw-label"><i data-lucide="timer"></i> Tirage automatique</div>
                             <div class="auto-draw-countdown">Prochain tirage dans <strong><span id="autoDrawCountdown">--</span></strong></div>
                         </div>
+                        <div id="pendingBingoPanel" class="pending-bingo-panel hidden">
+                            <p id="pendingBingoMsg"></p>
+                            <div class="pending-bingo-actions">
+                                <button class="btn btn-success" id="btnApproveBingo"><i data-lucide="check"></i> Valider</button>
+                                <button class="btn btn-danger" id="btnRejectBingo"><i data-lucide="x"></i> Rejeter</button>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Called numbers -->
@@ -110,9 +117,51 @@
                         <h3><i data-lucide="users"></i> Joueurs</h3>
                         <div class="players-status" id="playersStatus"></div>
                     </div>
+
+                    <!-- Chat -->
+                    <div class="sidebar-panel chat-panel" id="chatPanel">
+                        <h3><i data-lucide="message-circle"></i> Chat</h3>
+                        <div class="chat-messages" id="chatMessages"></div>
+                        <div class="chat-input-row">
+                            <input type="text" id="chatInput" placeholder="Message..." maxlength="200" autocomplete="off">
+                            <button class="btn btn-primary chat-send-btn" id="chatSendBtn" type="button">
+                                <i data-lucide="send"></i>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
+
+        <footer class="rgpd-footer">
+            <p>En utilisant BingOnline, vous acceptez que vos données Google (nom, photo) soient utilisées pour la session de jeu uniquement. Aucune donnée n'est vendue ni partagée. <a href="#" id="rgpdLink">En savoir plus</a></p>
+        </footer>
+    </div>
+
+    <!-- RGPD Modal -->
+    <div id="rgpdModal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <h3 style="margin-bottom:12px;">🔒 Confidentialité</h3>
+        <p style="color:var(--text-muted);font-size:0.9rem;line-height:1.6;margin-bottom:16px;">
+          BingOnline utilise Firebase Authentication (Google) pour vous identifier. Votre nom d'affichage et photo de profil sont stockés temporairement dans Firestore uniquement le temps de la partie.<br><br>
+          Aucune donnée n'est partagée avec des tiers. Les messages du chat sont stockés dans la room de jeu et supprimés avec celle-ci.<br><br>
+          Aucun cookie publicitaire ou traceur n'est utilisé.
+        </p>
+        <div class="modal-actions">
+          <button class="btn btn-primary" id="rgpdModalClose">Fermer</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Custom Confirm Modal -->
+    <div id="confirmModal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <p id="confirmModalMsg" class="modal-msg">Êtes-vous sûr ?</p>
+        <div class="modal-actions">
+          <button class="btn btn-outline" id="confirmModalCancel">Annuler</button>
+          <button class="btn btn-danger" id="confirmModalOk">Confirmer</button>
+        </div>
+      </div>
     </div>
 
     <!-- Winner overlay -->

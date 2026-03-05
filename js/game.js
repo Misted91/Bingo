@@ -9,13 +9,14 @@ let isHost = false;
 let myGrids = [];         // array of grid arrays (multi-grid support)
 let myMarkedGrids = [];   // array of marked arrays
 let calledNumbers = [];
-let roomSettings = { drawMode: 'manual', drawInterval: 10, gridCount: 1, patterns: ['line', 'column', 'diagonal'] };
+let roomSettings = { drawMode: 'manual', drawInterval: 10, gridCount: 1, patterns: ['line', 'column', 'diagonal'], calledAnimations: true, bingoValidation: 'auto' };
 let roomListener = null;
 let playersListener = null;
 let bingoAlreadyClaimed = false;
 let isDrawing = false;
 let countdownInterval = null;
 let autoDrawCountdown = 0;
+let pendingBingoShownFor = null;
 
 // ===== INIT =====
 const params = new URLSearchParams(window.location.search);
@@ -30,11 +31,19 @@ document.addEventListener('DOMContentLoaded', () => {
     lucide.createIcons();
 
     document.getElementById('btnQuitGame').addEventListener('click', (e) => {
-        if (!confirmLeave()) e.preventDefault();
+        e.preventDefault();
+        showConfirmModal('Quitter la partie en cours ?', () => {
+            window.location.href = './index.html';
+        });
     });
     document.getElementById('btnDraw').addEventListener('click', drawNumber);
     document.getElementById('btnDrawSidebar').addEventListener('click', drawNumber);
     document.getElementById('btnBingo').addEventListener('click', claimBingo);
+
+    const rejectBtn = document.getElementById('btnRejectBingo');
+    if (rejectBtn) rejectBtn.addEventListener('click', rejectBingo);
+
+    initRgpdModal();
 });
 
 auth.onAuthStateChanged(user => {
@@ -97,6 +106,7 @@ async function initGame() {
         }
 
         document.getElementById('statusRoomCode').textContent = room.code;
+        sessionStorage.setItem('bingo_session', JSON.stringify({ roomId, roomCode: room.code }));
 
         if (isHost) {
             document.getElementById('hostPanel').classList.remove('hidden');
@@ -116,6 +126,7 @@ async function initGame() {
         showGameContainer();
         listenToRoom();
         listenToPlayers();
+        initGameChat();
     } catch (e) {
         console.error('initGame error:', e);
         showToast('Erreur de chargement', 'error');
@@ -162,6 +173,7 @@ function listenToRoom() {
     roomListener = db.collection('bingo_rooms').doc(roomId).onSnapshot(snap => {
         if (!snap.exists) {
             showToast('La room a été fermée.', 'error');
+            sessionStorage.removeItem('bingo_session');
             setTimeout(() => window.location.href = './index.html', 2000);
             return;
         }
@@ -177,6 +189,33 @@ function listenToRoom() {
             highlightGridCalled();
             checkAutoMark(latest);
             updateBingoButton();
+        }
+
+        // Handle pendingBingo
+        if (room.pendingBingo) {
+            if (isHost && pendingBingoShownFor !== room.pendingBingo.uid) {
+                pendingBingoShownFor = room.pendingBingo.uid;
+                const panel = document.getElementById('pendingBingoPanel');
+                if (panel) {
+                    panel.classList.remove('hidden');
+                    document.getElementById('pendingBingoMsg').textContent = room.pendingBingo.name + ' réclame un Bingo !';
+                    document.getElementById('btnApproveBingo').onclick = () => approveBingo(room.pendingBingo.uid, room.pendingBingo.name);
+                }
+            } else if (!isHost && room.pendingBingo.uid !== currentUser?.uid && pendingBingoShownFor !== room.pendingBingo.uid) {
+                pendingBingoShownFor = room.pendingBingo.uid;
+                showToast(room.pendingBingo.name + ' réclame un Bingo !', 'info');
+            }
+        } else if (pendingBingoShownFor) {
+            const wasPending = pendingBingoShownFor;
+            pendingBingoShownFor = null;
+            const panel = document.getElementById('pendingBingoPanel');
+            if (panel) panel.classList.add('hidden');
+            // If I was the one who claimed and game isn't finished, my bingo was rejected
+            if (bingoAlreadyClaimed && !isHost && room.status !== 'finished' && wasPending === currentUser?.uid) {
+                bingoAlreadyClaimed = false;
+                showToast('Ton Bingo a été rejeté. Tu peux réessayer !', 'error');
+                updateBingoButton();
+            }
         }
 
         if (room.status === 'finished') {
@@ -282,9 +321,11 @@ function checkAutoMark(number) {
                 const idx = r * 5 + c;
                 if (myGrids[g][idx] === number && !myMarkedGrids[g][idx]) {
                     const cell = document.getElementById('cell-' + g + '-' + r + '-' + c);
-                    if (cell) {
+                    if (cell && roomSettings.calledAnimations !== false) {
                         cell.classList.add('called', 'cell-pulse');
                         setTimeout(() => cell.classList.remove('cell-pulse'), 1500);
+                    } else if (cell) {
+                        cell.classList.add('called');
                     }
                 }
             }
@@ -420,11 +461,18 @@ async function claimBingo() {
             .collection('players').doc(currentUser.uid)
             .update({ hasBingo: true });
 
-        await db.collection('bingo_rooms').doc(roomId).update({
-            status: 'finished',
-            winner: currentUser.uid,
-            winnerName: currentUser.displayName
-        });
+        if (roomSettings.bingoValidation === 'manual') {
+            await db.collection('bingo_rooms').doc(roomId).update({
+                pendingBingo: { uid: currentUser.uid, name: currentUser.displayName }
+            });
+            showToast('Bingo réclamé ! En attente de validation...', 'info');
+        } else {
+            await db.collection('bingo_rooms').doc(roomId).update({
+                status: 'finished',
+                winner: currentUser.uid,
+                winnerName: currentUser.displayName
+            });
+        }
     } catch (e) {
         console.error('claimBingo error:', e);
         showToast('Erreur lors du Bingo', 'error');
@@ -531,6 +579,7 @@ function renderPlayersStatus(playerDocs) {
 
 function handleGameFinished(room) {
     stopAutoDrawTimer();
+    sessionStorage.removeItem('bingo_session');
 
     const overlay = document.getElementById('winner-overlay');
     const title = document.getElementById('winnerTitle');
@@ -593,6 +642,80 @@ function renderHeaderAuth(user) {
     }
 }
 
-function confirmLeave() {
-    return confirm('Quitter la partie en cours ?');
+// ===== BINGO APPROVE / REJECT (host) =====
+async function approveBingo(uid, name) {
+    try {
+        await db.collection('bingo_rooms').doc(roomId).update({
+            status: 'finished',
+            winner: uid,
+            winnerName: name,
+            pendingBingo: firebase.firestore.FieldValue.delete()
+        });
+    } catch(e) {
+        console.error('approveBingo error:', e);
+        showToast('Erreur lors de la validation', 'error');
+    }
+}
+
+async function rejectBingo() {
+    try {
+        await db.collection('bingo_rooms').doc(roomId).update({
+            pendingBingo: firebase.firestore.FieldValue.delete()
+        });
+    } catch(e) {
+        console.error('rejectBingo error:', e);
+        showToast('Erreur lors du rejet', 'error');
+    }
+}
+
+// ===== GAME CHAT =====
+function initGameChat() {
+    const messagesEl = document.getElementById('chatMessages');
+    if (!messagesEl) return;
+
+    db.collection('bingo_rooms').doc(roomId)
+        .collection('messages')
+        .orderBy('sentAt', 'asc')
+        .limitToLast(50)
+        .onSnapshot(snap => {
+            snap.docChanges().forEach(change => {
+                if (change.type === 'added') {
+                    appendGameChatMessage(change.doc.data(), messagesEl);
+                }
+            });
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        });
+
+    const input = document.getElementById('chatInput');
+    const btn = document.getElementById('chatSendBtn');
+    if (btn) btn.addEventListener('click', sendGameChatMessage);
+    if (input) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendGameChatMessage(); } });
+}
+
+async function sendGameChatMessage() {
+    if (!roomId || !currentUser) return;
+    const input = document.getElementById('chatInput');
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    try {
+        await db.collection('bingo_rooms').doc(roomId).collection('messages').add({
+            uid: currentUser.uid,
+            author: currentUser.displayName,
+            text,
+            sentAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    } catch(e) { console.error('Error sending game chat message:', e); }
+}
+
+function appendGameChatMessage(data, container) {
+    if (!data.text) return;
+    const div = document.createElement('div');
+    div.className = 'chat-msg' + (data.uid === currentUser?.uid ? ' my-msg' : '');
+    const author = document.createElement('span');
+    author.className = 'chat-author';
+    author.textContent = data.author || 'Anonyme';
+    div.appendChild(author);
+    div.append(data.text);
+    container.appendChild(div);
 }

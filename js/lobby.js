@@ -12,7 +12,9 @@ let settingsData = {
     drawMode: 'manual',
     drawInterval: 10,
     gridCount: 1,
-    patterns: ['line', 'column', 'diagonal']
+    patterns: ['line', 'column', 'diagonal'],
+    calledAnimations: true,
+    bingoValidation: 'auto'
 };
 
 // ===== EVENT LISTENERS =====
@@ -33,6 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     initSettingsUI();
+    initRgpdModal();
 });
 
 // ===== SETTINGS UI =====
@@ -81,6 +84,26 @@ function initSettingsUI() {
             const cb = document.querySelector(`#patternsGrid input[value="${lastChecked}"]`);
             if (cb) cb.checked = true;
         }
+    });
+
+    // Called animations toggle
+    document.getElementById('calledAnimToggle').addEventListener('click', (e) => {
+        const btn = e.target.closest('.toggle-btn');
+        if (!btn) return;
+        document.querySelectorAll('#calledAnimToggle .toggle-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        settingsData.calledAnimations = btn.dataset.value === 'true';
+        saveSettings();
+    });
+
+    // Bingo validation toggle
+    document.getElementById('bingoValidationToggle').addEventListener('click', (e) => {
+        const btn = e.target.closest('.toggle-btn');
+        if (!btn) return;
+        document.querySelectorAll('#bingoValidationToggle .toggle-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        settingsData.bingoValidation = btn.dataset.value;
+        saveSettings();
     });
 
     renderPatternMinis();
@@ -144,6 +167,20 @@ function applySettingsToUI(settings) {
             cb.checked = settings.patterns.includes(cb.value);
         });
     }
+
+    // Called animations
+    if (settings.calledAnimations !== undefined) {
+        document.querySelectorAll('#calledAnimToggle .toggle-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.value === String(settings.calledAnimations));
+        });
+    }
+
+    // Bingo validation
+    if (settings.bingoValidation) {
+        document.querySelectorAll('#bingoValidationToggle .toggle-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.value === settings.bingoValidation);
+        });
+    }
 }
 
 function updateSettingsSummary(settings) {
@@ -158,10 +195,14 @@ function updateSettingsSummary(settings) {
         corners: '4 Coins', fullCard: 'Carton plein', xPattern: 'Croix (X)'
     };
     const patternsText = (settings.patterns || []).map(p => patternNames[p] || p).join(', ');
+    const animText = settings.calledAnimations === false ? 'Désactivées' : 'Activées';
+    const validationText = settings.bingoValidation === 'manual' ? 'Manuel (vote)' : 'Auto';
 
     content.innerHTML = `
         <div class="summary-item"><span>Mode de tirage</span><strong>${drawModeText}</strong></div>
         <div class="summary-item"><span>Grilles par joueur</span><strong>${settings.gridCount}</strong></div>
+        <div class="summary-item"><span>Animations tirages</span><strong>${animText}</strong></div>
+        <div class="summary-item"><span>Validation Bingo</span><strong>${validationText}</strong></div>
         <div class="summary-item"><span>Patterns gagnants</span><strong>${patternsText || '-'}</strong></div>
     `;
 }
@@ -234,6 +275,8 @@ async function createRoom() {
         currentRoomCode = code;
         isHost = true;
 
+        sessionStorage.setItem('bingo_session', JSON.stringify({ roomId: currentRoomId, roomCode: currentRoomCode }));
+
         document.getElementById('displayedCode').textContent = code;
         document.getElementById('btnStart').classList.remove('hidden');
         document.getElementById('waitingMsg').classList.add('hidden');
@@ -241,6 +284,7 @@ async function createRoom() {
         document.getElementById('settingsSummary').classList.add('hidden');
         showWaitingRoom();
         listenToRoom(roomRef.id);
+        initChat(roomRef.id);
         showToast('Room créée ! Code : ' + code, 'success');
     } catch (e) {
         console.error(e);
@@ -306,6 +350,8 @@ async function joinRoom() {
         currentRoomCode = code;
         isHost = room.host === currentUser.uid;
 
+        sessionStorage.setItem('bingo_session', JSON.stringify({ roomId: currentRoomId, roomCode: currentRoomCode }));
+
         document.getElementById('displayedCode').textContent = code;
 
         const btnStart = document.getElementById('btnStart');
@@ -332,6 +378,7 @@ async function joinRoom() {
 
         showWaitingRoom();
         listenToRoom(roomDoc.id);
+        initChat(roomDoc.id);
         showToast('Room rejointe !', 'success');
     } catch (e) {
         console.error(e);
@@ -444,6 +491,8 @@ async function leaveRoom() {
 
 function leaveRoomLocal() {
     if (roomListener) { roomListener(); roomListener = null; }
+    if (chatListener) { chatListener(); chatListener = null; }
+    sessionStorage.removeItem('bingo_session');
     currentRoomId = null;
     currentRoomCode = null;
     isHost = false;
@@ -457,4 +506,102 @@ function copyCode() {
     navigator.clipboard.writeText(currentRoomCode).then(() => {
         showToast('Code copié !', 'success');
     });
+}
+
+// ===== SESSION REJOIN =====
+async function tryRejoinSession(savedRoomId, savedCode) {
+    if (!currentUser) return;
+    try {
+        const roomSnap = await db.collection('bingo_rooms').doc(savedRoomId).get();
+        if (!roomSnap.exists) { sessionStorage.removeItem('bingo_session'); return; }
+        const room = roomSnap.data();
+        if (room.status === 'finished') { sessionStorage.removeItem('bingo_session'); return; }
+        const playerSnap = await db.collection('bingo_rooms').doc(savedRoomId)
+            .collection('players').doc(currentUser.uid).get();
+        if (!playerSnap.exists) { sessionStorage.removeItem('bingo_session'); return; }
+        if (room.status === 'playing') {
+            window.location.href = './game.html?room=' + savedRoomId;
+            return;
+        }
+        // Restore waiting room state
+        currentRoomId = savedRoomId;
+        currentRoomCode = savedCode;
+        isHost = room.host === currentUser.uid;
+        document.getElementById('displayedCode').textContent = savedCode;
+        if (isHost) {
+            document.getElementById('btnStart').classList.remove('hidden');
+            document.getElementById('settingsPanel').classList.remove('hidden');
+            document.getElementById('settingsSummary').classList.add('hidden');
+            if (room.settings) applySettingsToUI(room.settings);
+        } else {
+            document.getElementById('btnStart').classList.add('hidden');
+            document.getElementById('settingsPanel').classList.add('hidden');
+            document.getElementById('settingsSummary').classList.remove('hidden');
+            updateSettingsSummary(room.settings || settingsData);
+        }
+        const waitingMsg = document.getElementById('waitingMsg');
+        if (isHost) { waitingMsg.textContent = ''; waitingMsg.classList.add('hidden'); }
+        else { waitingMsg.textContent = 'En attente que l\'hôte lance la partie...'; waitingMsg.classList.remove('hidden'); }
+        showWaitingRoom();
+        listenToRoom(savedRoomId);
+        initChat(savedRoomId);
+        showToast('Session restaurée !', 'success');
+    } catch(e) {
+        console.error('tryRejoinSession error:', e);
+        sessionStorage.removeItem('bingo_session');
+    }
+}
+
+// ===== CHAT =====
+let chatListener = null;
+
+function initChat(roomId) {
+    if (chatListener) chatListener();
+    const messagesEl = document.getElementById('chatMessages');
+    if (!messagesEl) return;
+    chatListener = db.collection('bingo_rooms').doc(roomId)
+        .collection('messages')
+        .orderBy('sentAt', 'asc')
+        .limitToLast(50)
+        .onSnapshot(snap => {
+            snap.docChanges().forEach(change => {
+                if (change.type === 'added') {
+                    appendChatMessage(change.doc.data(), messagesEl);
+                }
+            });
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        });
+
+    const input = document.getElementById('chatInput');
+    const btn = document.getElementById('chatSendBtn');
+    if (btn) btn.addEventListener('click', sendChatMessage);
+    if (input) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendChatMessage(); } });
+}
+
+async function sendChatMessage() {
+    if (!currentRoomId || !currentUser) return;
+    const input = document.getElementById('chatInput');
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    try {
+        await db.collection('bingo_rooms').doc(currentRoomId).collection('messages').add({
+            uid: currentUser.uid,
+            author: currentUser.displayName,
+            text,
+            sentAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    } catch(e) { console.error('Error sending chat message:', e); }
+}
+
+function appendChatMessage(data, container) {
+    if (!data.text) return;
+    const div = document.createElement('div');
+    div.className = 'chat-msg' + (data.uid === currentUser?.uid ? ' my-msg' : '');
+    const author = document.createElement('span');
+    author.className = 'chat-author';
+    author.textContent = data.author || 'Anonyme';
+    div.appendChild(author);
+    div.append(data.text);
+    container.appendChild(div);
 }

@@ -17,7 +17,7 @@ header {
   font-size: 1.4rem;
   font-weight: 800;
 }
-.logo .lucide { width: 1.6rem; height: 1.6rem; stroke: var(--primary-light); }
+.logo .lucide { width: 1em; height: 1em; stroke: var(--primary-light); }
 .logo span { color: var(--primary-light); }
 
 /* ===== AUTH AREA ===== */
@@ -248,6 +248,43 @@ header {
 .cell-pulse { animation: winPulse 0.5s ease 3; }
 .animate-pop { animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
 
+/* ===== CUSTOM MODAL ===== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(6px);
+}
+.modal-overlay.hidden { display: none !important; }
+.modal-card {
+  background: var(--bg2);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  padding: 28px 32px;
+  max-width: 380px;
+  width: 90%;
+  animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  text-align: center;
+}
+.modal-msg { font-size: 1rem; font-weight: 600; margin-bottom: 20px; color: var(--text); }
+.modal-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+/* ===== RGPD FOOTER ===== */
+.rgpd-footer {
+  margin-top: 24px;
+  padding: 12px 0;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  border-top: 1px solid var(--glass-border);
+}
+.rgpd-footer a { color: var(--primary-light); text-decoration: none; }
+.rgpd-footer a:hover { text-decoration: underline; }
+
 /* ===== RESPONSIVE COMPONENTS ===== */
 @media (max-width: 768px) {
   header {
@@ -257,7 +294,7 @@ header {
     gap: 10px;
   }
   .logo { font-size: 1.15rem; gap: 8px; }
-  .logo .lucide { width: 1.3rem; height: 1.3rem; }
+  .logo .lucide { width: 1em; height: 1em; }
 
   .auth-area { gap: 8px; flex-wrap: wrap; }
   .user-pill { padding: 6px 12px 6px 6px; }
@@ -315,7 +352,7 @@ header {
 @media (max-width: 360px) {
   header { padding: 8px 10px; margin-bottom: 10px; }
   .logo { font-size: 0.9rem; gap: 6px; }
-  .logo .lucide { width: 1.1rem; height: 1.1rem; }
+  .logo .lucide { width: 1em; height: 1em; }
 
   .section-title { font-size: 1.1rem; }
   .section-sub { font-size: 0.8rem; margin-bottom: 12px; }
