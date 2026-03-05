@@ -107,7 +107,7 @@
   animation: winPulse 0.6s ease infinite alternate;
 }
 .bingo-actions {
-  margin-top: 12px;
+  margin-top: 0;
   text-align: center;
 }
 
