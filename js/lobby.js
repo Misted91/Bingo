@@ -650,10 +650,28 @@ function renderPublicRooms(docs) {
     }
     if (noMsg) noMsg.classList.add('hidden');
 
+    let hasVisible = false;
     docs.forEach(doc => {
         const room = doc.data();
+
+        // Async check: skip and clean up rooms with no players
+        db.collection('bingo_rooms').doc(doc.id).collection('players').get().then(pSnap => {
+            if (pSnap.empty) {
+                scheduleRoomCleanup(doc.id);
+                const existing = container.querySelector(`[data-room-id="${doc.id}"]`);
+                if (existing) existing.remove();
+                // Show "no rooms" if none left
+                if (!container.querySelector('.public-room-card')) {
+                    if (noMsg) noMsg.classList.remove('hidden');
+                }
+                return;
+            }
+        }).catch(() => {});
+
+        hasVisible = true;
         const card = document.createElement('div');
         card.className = 'public-room-card';
+        card.dataset.roomId = doc.id;
 
         const info = document.createElement('div');
         info.className = 'public-room-info';

@@ -320,11 +320,18 @@
 <!-- RGPD Modal -->
 <div id="rgpdModal" class="modal-overlay hidden">
   <div class="modal-card">
-    <h3 style="margin-bottom:12px;">🔒 Confidentialité</h3>
+    <h3 style="margin-bottom:12px;">🔒 Confidentialité &amp; RGPD</h3>
     <p style="color:var(--text-muted);font-size:0.9rem;line-height:1.6;margin-bottom:16px;">
-      BingOnline utilise Firebase Authentication (Google) pour vous identifier. Votre nom d'affichage et photo de profil sont stockés temporairement dans Firestore uniquement le temps de la partie.<br><br>
-      Aucune donnée n'est partagée avec des tiers. Les messages du chat sont stockés dans la room de jeu et supprimés avec celle-ci.<br><br>
-      Aucun cookie publicitaire ou traceur n'est utilisé.
+      <strong>Authentification</strong><br>
+      BingOnline utilise Firebase Authentication (Google) pour vous identifier. Seuls votre nom d’affichage et votre photo de profil sont récupérés.<br><br>
+      <strong>Données stockées</strong><br>
+      Vos données de jeu (grilles, marquages, statut) sont stockées temporairement dans Cloud Firestore le temps de la partie. Les messages du chat et les indicateurs de frappe sont également stockés dans la room et supprimés avec celle-ci.<br><br>
+      <strong>Suppression automatique</strong><br>
+      Les rooms terminées ou vides sont automatiquement supprimées après 1 minute d’inactivité, incluant toutes les sous-collections (joueurs, messages, indicateurs de frappe).<br><br>
+      <strong>Rooms publiques</strong><br>
+      Si l’hôte choisit la visibilité « publique », le nom de l’hôte et le code de la room sont visibles par les autres joueurs connectés.<br><br>
+      <strong>Aucun tracking</strong><br>
+      Aucun cookie publicitaire, traceur ou outil d’analyse n’est utilisé. Aucune donnée n’est vendue ni partagée avec des tiers.
     </p>
     <div class="modal-actions">
       <button class="btn btn-primary" id="rgpdModalClose">Fermer</button>
