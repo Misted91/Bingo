@@ -54,6 +54,16 @@
             <div class="gate-icon">🎱</div>
             <h2 class="section-title">Connecte-toi pour jouer</h2>
             <p class="section-sub">Utilise le bouton de connexion dans la barre en haut pour commencer</p>
+            <div class="spectate-gate">
+                <p class="section-sub">Ou regarde une partie en cours :</p>
+                <div class="input-group input-group--inline">
+                    <input type="text" id="spectateCodeInput" placeholder="Code de la room" maxlength="9" autocomplete="off">
+                    <button class="btn btn-accent" id="btnSpectate">
+                        <i data-lucide="eye"></i>
+                        Spectater
+                    </button>
+                </div>
+            </div>
         </div>
 
         <!-- Lobby (shown when logged in, not in a room) -->

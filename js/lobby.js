@@ -73,6 +73,20 @@ document.addEventListener('DOMContentLoaded', () => {
         e.target.value = e.target.value.toUpperCase();
     });
 
+    // Spectate from auth gate
+    const spectateBtn = document.getElementById('btnSpectate');
+    if (spectateBtn) {
+        spectateBtn.addEventListener('click', () => {
+            const code = document.getElementById('spectateCodeInput').value.trim().toUpperCase().replace(/[^A-Z]/g, '');
+            if (code.length !== 8) { showToast('Code invalide (8 lettres)', 'error'); return; }
+            window.location.href = './game.html?code=' + code;
+        });
+    }
+    const spectateInput = document.getElementById('spectateCodeInput');
+    if (spectateInput) {
+        spectateInput.addEventListener('input', (e) => { e.target.value = e.target.value.toUpperCase(); });
+    }
+
     document.getElementById('logoHome').addEventListener('click', (e) => {
         e.preventDefault();
         if (currentRoomId) {
@@ -501,9 +515,8 @@ async function joinRoom() {
         }
 
         if (room.status === 'playing') {
-            showToast('La partie est déjà commencée !', 'error');
-            btn.disabled = false;
-            setButtonContent(btn, 'log-in', 'Rejoindre');
+            // Redirect to spectator mode
+            window.location.href = './game.html?room=' + roomDoc.id;
             return;
         }
 
@@ -967,7 +980,7 @@ function listenToPublicRooms() {
     if (publicRoomsListener) publicRoomsListener();
     publicRoomsListener = db.collection('bingo_rooms')
         .where('settings.visibility', '==', 'public')
-        .where('status', '==', 'waiting')
+        .where('status', 'in', ['waiting', 'playing'])
         .onSnapshot(snap => {
             renderPublicRooms(snap.docs);
         });
@@ -1018,6 +1031,11 @@ function renderPublicRooms(docs) {
         hostName.textContent = room.hostName || 'Hôte inconnu';
         info.appendChild(hostName);
 
+        const status = document.createElement('span');
+        status.className = 'public-room-status ' + (room.status === 'playing' ? 'status-playing' : 'status-waiting');
+        status.textContent = room.status === 'playing' ? 'En cours' : 'En attente';
+        info.appendChild(status);
+
         const code = document.createElement('span');
         code.className = 'public-room-code';
         code.textContent = room.code;
@@ -1027,8 +1045,15 @@ function renderPublicRooms(docs) {
 
         const joinBtn = document.createElement('button');
         joinBtn.className = 'btn btn-accent btn-sm';
-        joinBtn.innerHTML = '<i data-lucide=\"log-in\"></i> Rejoindre';
-        joinBtn.addEventListener('click', () => joinPublicRoom(doc.id, room.code));
+        if (room.status === 'playing') {
+            joinBtn.innerHTML = '<i data-lucide=\"eye\"></i> Spectater';
+            joinBtn.addEventListener('click', () => {
+                window.location.href = './game.html?room=' + doc.id;
+            });
+        } else {
+            joinBtn.innerHTML = '<i data-lucide=\"log-in\"></i> Rejoindre';
+            joinBtn.addEventListener('click', () => joinPublicRoom(doc.id, room.code));
+        }
         card.appendChild(joinBtn);
 
         container.appendChild(card);

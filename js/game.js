@@ -20,12 +20,14 @@ let countdownInterval = null;
 let autoDrawCountdown = 0;
 let pendingBingoShownFor = null;
 let lastGameMessageTime = 0;
+let isSpectator = false;
 
 // ===== INIT =====
 const params = new URLSearchParams(window.location.search);
 roomId = params.get('room');
+const roomCodeParam = params.get('code');
 
-if (!roomId) {
+if (!roomId && !roomCodeParam) {
     window.location.href = './index.html';
 }
 
@@ -35,15 +37,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('btnQuitGame').addEventListener('click', (e) => {
         e.preventDefault();
-        showConfirmModal('Quitter la partie en cours ?', () => {
-            window.location.href = './index.html';
-        });
+        showConfirmModal('Quitter la partie en cours ?', () => quitGame());
     });
     document.getElementById('logoHome').addEventListener('click', (e) => {
         e.preventDefault();
-        showConfirmModal('Quitter la partie en cours ?', () => {
-            window.location.href = './index.html';
-        });
+        showConfirmModal('Quitter la partie en cours ?', () => quitGame());
     });
     document.getElementById('btnDraw').addEventListener('click', drawNumber);
     document.getElementById('btnDrawSidebar').addEventListener('click', drawNumber);
@@ -55,18 +53,37 @@ document.addEventListener('DOMContentLoaded', () => {
     initRgpdModal();
 });
 
-auth.onAuthStateChanged(user => {
+auth.onAuthStateChanged(async (user) => {
     currentUser = user;
     renderHeaderAuth(user);
     if (user) {
         initGame();
     } else {
-        window.location.href = './index.html';
+        // Anonymous auth for spectating
+        try {
+            await auth.signInAnonymously();
+        } catch(e) {
+            window.location.href = './index.html';
+        }
     }
 });
 
 async function initGame() {
     try {
+        // Resolve room from code if needed
+        if (!roomId && roomCodeParam) {
+            const codeSnap = await db.collection('bingo_rooms')
+                .where('code', '==', roomCodeParam.toUpperCase().replace(/[^A-Z]/g, ''))
+                .limit(1).get();
+            if (codeSnap.empty) {
+                showToast('Room introuvable', 'error');
+                setTimeout(() => window.location.href = './index.html', 2000);
+                return;
+            }
+            roomId = codeSnap.docs[0].id;
+            history.replaceState(null, '', './game.html?room=' + roomId);
+        }
+
         const roomSnap = await db.collection('bingo_rooms').doc(roomId).get();
         if (!roomSnap.exists) {
             showToast('Room introuvable', 'error');
@@ -77,12 +94,45 @@ async function initGame() {
         isHost = room.host === currentUser.uid;
         roomSettings = room.settings || roomSettings;
 
-        const playerSnap = await db.collection('bingo_rooms').doc(roomId)
-            .collection('players').doc(currentUser.uid).get();
+        // Check if user is a player in this room
+        let playerSnap = null;
+        if (!currentUser.isAnonymous) {
+            playerSnap = await db.collection('bingo_rooms').doc(roomId)
+                .collection('players').doc(currentUser.uid).get();
+        }
 
-        if (!playerSnap.exists) {
-            showToast('Tu n\'es plus dans cette room', 'error');
-            setTimeout(() => window.location.href = './index.html', 2000);
+        if (!playerSnap || !playerSnap.exists) {
+            // Enter spectator mode
+            isSpectator = true;
+            isHost = false;
+            calledNumbers = room.calledNumbers || [];
+            document.getElementById('statusRoomCode').textContent = room.code;
+
+            const spectatorBanner = document.getElementById('spectatorBanner');
+            if (spectatorBanner) spectatorBanner.classList.remove('hidden');
+
+            document.getElementById('bingoGridsContainer').innerHTML =
+                '<div class="spectator-placeholder"><i data-lucide="eye"></i><p>Mode Spectateur</p><span>Vous regardez la partie en cours</span></div>';
+
+            document.getElementById('btnBingo').classList.add('hidden');
+            document.getElementById('btnDraw').classList.add('hidden');
+            document.getElementById('hostPanel').classList.add('hidden');
+
+            renderCalledNumbers();
+            updateCalledCount();
+            showGameContainer();
+            listenToRoom();
+            listenToPlayers();
+            initGameChat();
+
+            if (currentUser.isAnonymous) {
+                const chatInputRow = document.querySelector('#chatPanel .chat-input-row');
+                if (chatInputRow) {
+                    chatInputRow.innerHTML = '<p class="chat-spectator-msg"><i data-lucide="lock"></i> Connectez-vous pour chatter</p>';
+                }
+            }
+
+            lucide.createIcons();
             return;
         }
 
@@ -154,6 +204,56 @@ async function initGame() {
         console.error('initGame error:', e);
         showToast('Erreur de chargement', 'error');
         setTimeout(() => window.location.href = './index.html', 2000);
+    }
+}
+
+// ===== QUIT GAME =====
+async function quitGame() {
+    sessionStorage.removeItem('bingo_session');
+    if (roomListener) { roomListener(); roomListener = null; }
+    if (playersListener) { playersListener(); playersListener = null; }
+    stopAutoDrawTimer();
+    if (gameTypingDocRef) { gameTypingDocRef.delete().catch(() => {}); gameTypingDocRef = null; }
+
+    if (currentUser && !isSpectator && !currentUser.isAnonymous) {
+        try {
+            await db.collection('bingo_rooms').doc(roomId)
+                .collection('players').doc(currentUser.uid).delete();
+        } catch(e) { /* ignore */ }
+    }
+
+    if (currentUser && currentUser.isAnonymous) {
+        try { await auth.signOut(); } catch(e) {}
+    }
+
+    window.location.href = './index.html';
+}
+
+// ===== GAME MUTE/UNMUTE =====
+async function gameMutePlayer(playerId, playerName) {
+    if (!roomId || !isHost) return;
+    try {
+        const mutedUsers = [...(roomSettings.mutedUsers || [])];
+        if (!mutedUsers.includes(playerId)) mutedUsers.push(playerId);
+        roomSettings.mutedUsers = mutedUsers;
+        await db.collection('bingo_rooms').doc(roomId).update({ 'settings.mutedUsers': mutedUsers });
+        showToast(playerName + ' est muet dans le chat', 'success');
+    } catch (e) {
+        console.error('gameMutePlayer error:', e);
+        showToast('Erreur lors du mute', 'error');
+    }
+}
+
+async function gameUnmutePlayer(playerId, playerName) {
+    if (!roomId || !isHost) return;
+    try {
+        const mutedUsers = (roomSettings.mutedUsers || []).filter(id => id !== playerId);
+        roomSettings.mutedUsers = mutedUsers;
+        await db.collection('bingo_rooms').doc(roomId).update({ 'settings.mutedUsers': mutedUsers });
+        showToast(playerName + ' peut à nouveau parler', 'success');
+    } catch (e) {
+        console.error('gameUnmutePlayer error:', e);
+        showToast('Erreur lors du unmute', 'error');
     }
 }
 
@@ -276,13 +376,15 @@ function listenToRoom() {
 function listenToPlayers() {
     playersListener = db.collection('bingo_rooms').doc(roomId)
         .collection('players').onSnapshot(snap => {
-            // Detect kick: current user no longer in players
-            const ids = snap.docs.map(d => d.id);
-            if (currentUser && !ids.includes(currentUser.uid)) {
-                showToast('Tu as été expulsé de la partie.', 'error');
-                sessionStorage.removeItem('bingo_session');
-                setTimeout(() => window.location.href = './index.html', 2000);
-                return;
+            // Detect kick: current user no longer in players (skip for spectators)
+            if (!isSpectator) {
+                const ids = snap.docs.map(d => d.id);
+                if (currentUser && !ids.includes(currentUser.uid)) {
+                    showToast('Tu as été expulsé de la partie.', 'error');
+                    sessionStorage.removeItem('bingo_session');
+                    setTimeout(() => window.location.href = './index.html', 2000);
+                    return;
+                }
             }
             renderPlayersStatus(snap.docs);
         });
@@ -666,6 +768,7 @@ function renderPlayersStatus(playerDocs) {
 
     playerDocs.forEach(doc => {
         const p = doc.data();
+        const isMe = doc.id === currentUser?.uid;
         const div = document.createElement('div');
         div.className = 'player-status-item';
 
@@ -676,8 +779,19 @@ function renderPlayersStatus(playerDocs) {
 
         const nameSpan = document.createElement('span');
         nameSpan.className = 'ps-name';
-        nameSpan.textContent = p.name + (doc.id === currentUser?.uid ? ' 👤' : '');
+        nameSpan.textContent = p.name + (isMe ? ' 👤' : '');
         div.appendChild(nameSpan);
+
+        // Muted badge
+        if ((roomSettings.mutedUsers || []).includes(doc.id)) {
+            const muteBadge = document.createElement('span');
+            muteBadge.className = 'muted-badge';
+            muteBadge.title = 'Muet';
+            const muteIcon = document.createElement('i');
+            muteIcon.dataset.lucide = 'mic-off';
+            muteBadge.appendChild(muteIcon);
+            div.appendChild(muteBadge);
+        }
 
         if (p.hasBingo) {
             const bingoSpan = document.createElement('span');
@@ -686,8 +800,27 @@ function renderPlayersStatus(playerDocs) {
             div.appendChild(bingoSpan);
         }
 
+        // Host actions: mute/unmute
+        if (isHost && !isMe) {
+            const isMuted = (roomSettings.mutedUsers || []).includes(doc.id);
+            const muteBtn = document.createElement('button');
+            muteBtn.className = 'player-action-btn mute-btn' + (isMuted ? ' active' : '');
+            muteBtn.title = isMuted ? 'Rétablir le chat' : 'Rendre muet';
+            muteBtn.innerHTML = isMuted ? '<i data-lucide="mic-off"></i>' : '<i data-lucide="mic"></i>';
+            muteBtn.addEventListener('click', () => {
+                if (isMuted) {
+                    gameUnmutePlayer(doc.id, p.name);
+                } else {
+                    showConfirmModal('Rendre ' + p.name + ' muet dans le chat ?', () => gameMutePlayer(doc.id, p.name));
+                }
+            });
+            div.appendChild(muteBtn);
+        }
+
         container.appendChild(div);
     });
+
+    lucide.createIcons();
 }
 
 function handleGameFinished(room) {
@@ -755,7 +888,7 @@ function renderHeaderAuth(user) {
     if (!area) return;
     area.textContent = '';
 
-    if (user) {
+    if (user && !user.isAnonymous) {
         const pill = document.createElement('div');
         pill.className = 'user-pill';
 
@@ -770,6 +903,18 @@ function renderHeaderAuth(user) {
         pill.appendChild(name);
 
         area.appendChild(pill);
+    } else if (user && user.isAnonymous) {
+        const pill = document.createElement('div');
+        pill.className = 'user-pill';
+        const icon = document.createElement('i');
+        icon.dataset.lucide = 'eye';
+        pill.appendChild(icon);
+        const name = document.createElement('span');
+        name.className = 'name';
+        name.textContent = 'Spectateur';
+        pill.appendChild(name);
+        area.appendChild(pill);
+        lucide.createIcons();
     }
 }
 
@@ -861,8 +1006,10 @@ function initGameChat() {
             }
         });
 
-    gameTypingDocRef = db.collection('bingo_rooms').doc(roomId)
-        .collection('typing').doc(currentUser?.uid);
+    if (currentUser && !currentUser.isAnonymous) {
+        gameTypingDocRef = db.collection('bingo_rooms').doc(roomId)
+            .collection('typing').doc(currentUser.uid);
+    }
 
     const input = document.getElementById('chatInput');
     const btn = document.getElementById('chatSendBtn');
@@ -874,7 +1021,7 @@ function initGameChat() {
 }
 
 function onGameChatTyping() {
-    if (!gameTypingDocRef || !currentUser) return;
+    if (!gameTypingDocRef || !currentUser || currentUser.isAnonymous) return;
     gameTypingDocRef.set({
         name: currentUser.displayName,
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
@@ -886,7 +1033,7 @@ function onGameChatTyping() {
 }
 
 async function sendGameChatMessage() {
-    if (!roomId || !currentUser) return;
+    if (!roomId || !currentUser || currentUser.isAnonymous) return;
     const input = document.getElementById('chatInput');
     let text = input.value.trim();
     if (!text) return;

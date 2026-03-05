@@ -1,4 +1,4 @@
-# 🎱 BingOnline
+��# 🎱 BingOnline
 
 **Joue au Bingo en ligne avec tes amis, gratuitement et sans inscription compliquée.**
 
@@ -61,11 +61,11 @@ Aucun cookie publicitaire, traceur ou outil d'analyse n'est utilisé. Aucune don
 
 | | |
 |---|---|
-| Frontend | HTML · CSS · JavaScript (vanilla) |
-| Auth | Firebase Authentication (Google) |
+| Frontend | HTML · CSS · JavaScript (vanilla|
+| Auth | Firebase Authentication (Google|
 | Temps réel | Cloud Firestore |
-| Icônes | [Lucide](https://lucide.dev/) · [Simple Icons](https://simpleicons.org/) |
-| Police | [Outfit](https://fonts.google.com/specimen/Outfit) |
+| Icônes | [Lucide](https://lucide.dev/· [Simple Icons](https://simpleicons.org/|
+| Police | [Outfit](https://fonts.google.com/specimen/Outfit|
 | Hébergement | GitHub Pages |
 
 ---

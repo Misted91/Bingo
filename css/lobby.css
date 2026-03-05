@@ -8,6 +8,37 @@
   margin-bottom: 20px;
   animation: pulse 2s ease-in-out infinite;
 }
+.spectate-gate {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--glass-border);
+}
+.spectate-gate .section-sub { margin-bottom: 16px; }
+.input-group--inline {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  max-width: 400px;
+  margin: 0 auto;
+  align-items: center;
+}
+.input-group--inline input { flex: 1; }
+.public-room-status {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+.public-room-status.status-waiting {
+  background: rgba(16,185,129,0.15);
+  color: var(--accent2);
+}
+.public-room-status.status-playing {
+  background: rgba(245,158,11,0.15);
+  color: var(--warn);
+}
 
 /* ===== LOBBY CARDS ===== */
 .lobby-grid {

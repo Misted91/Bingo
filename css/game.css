@@ -518,3 +518,79 @@
   padding: 8px 16px;
   font-size: 0.85rem;
 }
+
+/* ===== SPECTATOR MODE ===== */
+.spectator-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, rgba(6,182,212,0.15), rgba(124,58,237,0.1));
+  border: 1px solid rgba(6,182,212,0.3);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--accent);
+}
+.spectator-banner .lucide { width: 1.2em; height: 1.2em; }
+
+.spectator-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 24px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  text-align: center;
+  color: var(--text-muted);
+}
+.spectator-placeholder .lucide { width: 3rem; height: 3rem; color: var(--accent); }
+.spectator-placeholder p { font-size: 1.4rem; font-weight: 800; color: var(--text); margin: 0; }
+.spectator-placeholder span { font-size: 0.95rem; }
+
+.chat-spectator-msg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-style: italic;
+  margin: 0;
+}
+.chat-spectator-msg .lucide { width: 1rem; height: 1rem; }
+
+.player-status-item .muted-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  background: rgba(239,68,68,0.15);
+  border-radius: 10px;
+  color: #f87171;
+  font-size: 0.75rem;
+}
+.player-status-item .muted-badge .lucide { width: 0.8rem; height: 0.8rem; }
+
+.player-status-item .player-action-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--glass-border);
+  background: rgba(255,255,255,0.05);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  padding: 0;
+}
+.player-status-item .player-action-btn:hover { background: rgba(255,255,255,0.1); color: var(--text); }
+.player-status-item .player-action-btn.mute-btn.active { color: #f87171; border-color: rgba(239,68,68,0.3); }
+.player-status-item .player-action-btn .lucide { width: 0.8rem; height: 0.8rem; }
