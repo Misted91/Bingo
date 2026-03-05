@@ -42,12 +42,15 @@
 
 /* ===== LOBBY CARDS ===== */
 .lobby-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-wrap: wrap;
   gap: 24px;
   margin-bottom: 32px;
 }
-@media (max-width: 640px) { .lobby-grid { grid-template-columns: 1fr; } }
+.lobby-grid > .card {
+  flex: 1 1 280px;
+  min-width: 0;
+}
 
 .card {
   background: var(--glass);

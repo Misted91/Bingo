@@ -968,7 +968,7 @@ function applyCodeDisplay() {
     const icon = document.getElementById('toggleCodeIcon');
     if (!codeEl) return;
     if (codeHidden) {
-        codeEl.textContent = '••••••';
+        codeEl.textContent = '••••••••';
         codeEl.classList.add('code-masked');
         if (icon) icon.dataset.lucide = 'eye-off';
     } else {
