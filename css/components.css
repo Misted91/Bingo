@@ -294,7 +294,7 @@ header {
     gap: 10px;
   }
   .logo { font-size: 1.15rem; gap: 8px; }
-  .logo .lucide { width: 1.3rem; height: 1.3rem; }
+  .logo .lucide { width: 1em; height: 1em; }
 
   .auth-area { gap: 8px; flex-wrap: wrap; }
   .user-pill { padding: 6px 12px 6px 6px; }
@@ -352,7 +352,7 @@ header {
 @media (max-width: 360px) {
   header { padding: 8px 10px; margin-bottom: 10px; }
   .logo { font-size: 0.9rem; gap: 6px; }
-  .logo .lucide { width: 1.1rem; height: 1.1rem; }
+  .logo .lucide { width: 1em; height: 1em; }
 
   .section-title { font-size: 1.1rem; }
   .section-sub { font-size: 0.8rem; margin-bottom: 12px; }

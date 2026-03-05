@@ -173,6 +173,7 @@ function listenToRoom() {
     roomListener = db.collection('bingo_rooms').doc(roomId).onSnapshot(snap => {
         if (!snap.exists) {
             showToast('La room a été fermée.', 'error');
+            sessionStorage.removeItem('bingo_session');
             setTimeout(() => window.location.href = './index.html', 2000);
             return;
         }
@@ -578,6 +579,7 @@ function renderPlayersStatus(playerDocs) {
 
 function handleGameFinished(room) {
     stopAutoDrawTimer();
+    sessionStorage.removeItem('bingo_session');
 
     const overlay = document.getElementById('winner-overlay');
     const title = document.getElementById('winnerTitle');
@@ -687,7 +689,7 @@ function initGameChat() {
     const input = document.getElementById('chatInput');
     const btn = document.getElementById('chatSendBtn');
     if (btn) btn.addEventListener('click', sendGameChatMessage);
-    if (input) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendGameChatMessage(); });
+    if (input) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendGameChatMessage(); } });
 }
 
 async function sendGameChatMessage() {
@@ -707,12 +709,13 @@ async function sendGameChatMessage() {
 }
 
 function appendGameChatMessage(data, container) {
+    if (!data.text) return;
     const div = document.createElement('div');
     div.className = 'chat-msg' + (data.uid === currentUser?.uid ? ' my-msg' : '');
     const author = document.createElement('span');
     author.className = 'chat-author';
     author.textContent = data.author || 'Anonyme';
     div.appendChild(author);
-    div.append(data.text || '');
+    div.append(data.text);
     container.appendChild(div);
 }

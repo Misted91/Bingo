@@ -575,7 +575,7 @@ function initChat(roomId) {
     const input = document.getElementById('chatInput');
     const btn = document.getElementById('chatSendBtn');
     if (btn) btn.addEventListener('click', sendChatMessage);
-    if (input) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChatMessage(); });
+    if (input) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendChatMessage(); } });
 }
 
 async function sendChatMessage() {
@@ -595,12 +595,13 @@ async function sendChatMessage() {
 }
 
 function appendChatMessage(data, container) {
+    if (!data.text) return;
     const div = document.createElement('div');
     div.className = 'chat-msg' + (data.uid === currentUser?.uid ? ' my-msg' : '');
     const author = document.createElement('span');
     author.className = 'chat-author';
     author.textContent = data.author || 'Anonyme';
     div.appendChild(author);
-    div.append(data.text || '');
+    div.append(data.text);
     container.appendChild(div);
 }

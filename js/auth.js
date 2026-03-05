@@ -70,6 +70,8 @@ async function signIn() {
 
 async function signOut() {
     if (roomListener) roomListener();
+    if (typeof chatListener !== 'undefined' && chatListener) chatListener();
+    sessionStorage.removeItem('bingo_session');
     currentRoomId = null;
     currentRoomCode = null;
     await auth.signOut();
