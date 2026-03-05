@@ -39,10 +39,10 @@
 <div class="wrapper">
     <!-- Header -->
     <header>
-        <div class="logo">
+        <a href="#" class="logo" id="logoHome">
             <i data-lucide="grid-3x3"></i>
             <h1>Bing<span>Online</span></h1>
-        </div>
+        </a>
         <div class="auth-area" id="authArea"></div>
     </header>
 
@@ -245,6 +245,24 @@
                         </button>
                     </div>
                     <p class="setting-hint">Filtre automatiquement les insultes et mots inappropriés dans le chat.</p>
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-label">Mode lent</label>
+                    <div class="range-wrapper">
+                        <input type="range" id="slowModeRange" min="0" max="600" step="5" value="0">
+                        <span class="range-value" id="slowModeValue">Désactivé</span>
+                    </div>
+                    <p class="setting-hint">Délai entre chaque message (0 = désactivé, max 600s).</p>
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-label">Longueur max des messages</label>
+                    <div class="range-wrapper">
+                        <input type="range" id="maxMsgLengthRange" min="10" max="500" step="10" value="200">
+                        <span class="range-value" id="maxMsgLengthValue">200 car.</span>
+                    </div>
+                    <p class="setting-hint">Nombre maximum de caractères par message.</p>
                 </div>
 
                 <div class="setting-group">

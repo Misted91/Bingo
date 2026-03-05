@@ -432,6 +432,8 @@
   background: rgba(255,255,255,0.04);
   border-radius: var(--radius-sm);
   animation: fadeIn 0.2s ease;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 .chat-msg .chat-author {
   font-weight: 700;

@@ -13,9 +13,10 @@ let codeHidden = true;
 let typingTimeout = null;
 let typingDocRef = null;
 let hostLeftTimeout = null;
+let lastMessageTime = 0;
 
 // Default game settings
-let settingsData = {
+const DEFAULT_SETTINGS = {
     drawMode: 'manual',
     drawInterval: 10,
     gridSize: 5,
@@ -26,8 +27,34 @@ let settingsData = {
     visibility: 'private',
     hideCode: true,
     chatEnabled: true,
-    chatFilter: false
+    chatFilter: false,
+    slowMode: 0,
+    maxMessageLength: 200,
+    mutedUsers: []
 };
+
+function loadSavedSettings() {
+    try {
+        const saved = localStorage.getItem('bingo_settings');
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            // Merge saved values into defaults (handles new fields added later)
+            return { ...DEFAULT_SETTINGS, ...parsed, mutedUsers: [] };
+        }
+    } catch (e) { console.warn('Failed to load saved settings:', e); }
+    return { ...DEFAULT_SETTINGS };
+}
+
+function persistSettings() {
+    try {
+        // Don't persist mutedUsers (per-room, not reusable)
+        const toSave = { ...settingsData };
+        delete toSave.mutedUsers;
+        localStorage.setItem('bingo_settings', JSON.stringify(toSave));
+    } catch (e) { console.warn('Failed to save settings:', e); }
+}
+
+let settingsData = loadSavedSettings();
 
 // ===== EVENT LISTENERS =====
 document.addEventListener('DOMContentLoaded', () => {
@@ -46,7 +73,19 @@ document.addEventListener('DOMContentLoaded', () => {
         e.target.value = e.target.value.toUpperCase();
     });
 
+    document.getElementById('logoHome').addEventListener('click', (e) => {
+        e.preventDefault();
+        if (currentRoomId) {
+            showConfirmModal('Quitter la room en cours ?', () => {
+                leaveRoom();
+            });
+        } else {
+            window.location.href = './index.html';
+        }
+    });
+
     initSettingsUI();
+    applySettingsToUI(settingsData);
     initRgpdModal();
     listenToPublicRooms();
 });
@@ -171,6 +210,24 @@ function initSettingsUI() {
         saveSettings();
     });
 
+    // Slow mode slider
+    document.getElementById('slowModeRange').addEventListener('input', (e) => {
+        const val = parseInt(e.target.value);
+        settingsData.slowMode = val;
+        document.getElementById('slowModeValue').textContent = val === 0 ? 'Désactivé' : val + 's';
+        saveSettings();
+    });
+
+    // Max message length slider
+    document.getElementById('maxMsgLengthRange').addEventListener('input', (e) => {
+        const val = parseInt(e.target.value);
+        settingsData.maxMessageLength = val;
+        document.getElementById('maxMsgLengthValue').textContent = val + ' car.';
+        const chatInput = document.getElementById('chatInput');
+        if (chatInput) chatInput.maxLength = val;
+        saveSettings();
+    });
+
     renderPatternMinis();
 }
 
@@ -197,6 +254,7 @@ function renderPatternMinis() {
 }
 
 async function saveSettings() {
+    persistSettings();
     if (!currentRoomId || !isHost) return;
     try {
         await db.collection('bingo_rooms').doc(currentRoomId).update({ settings: settingsData });
@@ -282,6 +340,25 @@ function applySettingsToUI(settings) {
         document.querySelectorAll('#chatFilterToggle .toggle-btn').forEach(b => {
             b.classList.toggle('active', b.dataset.value === String(settings.chatFilter));
         });
+    }
+
+    // Slow mode
+    if (settings.slowMode !== undefined) {
+        document.getElementById('slowModeRange').value = settings.slowMode;
+        document.getElementById('slowModeValue').textContent = settings.slowMode === 0 ? 'Désactivé' : settings.slowMode + 's';
+    }
+
+    // Max message length
+    if (settings.maxMessageLength !== undefined) {
+        document.getElementById('maxMsgLengthRange').value = settings.maxMessageLength;
+        document.getElementById('maxMsgLengthValue').textContent = settings.maxMessageLength + ' car.';
+        const chatInput = document.getElementById('chatInput');
+        if (chatInput) chatInput.maxLength = settings.maxMessageLength;
+    }
+
+    // Muted users (update player rendering)
+    if (settings.mutedUsers !== undefined) {
+        settingsData.mutedUsers = settings.mutedUsers || [];
     }
 }
 
@@ -643,6 +720,16 @@ function renderPlayers(playerDocs, hostId) {
             li.appendChild(badge);
         }
 
+        // Muted badge
+        if ((settingsData.mutedUsers || []).includes(doc.id)) {
+            const muteBadge = document.createElement('span');
+            muteBadge.className = 'muted-badge';
+            const muteIcon = document.createElement('i');
+            muteIcon.dataset.lucide = 'mic-off';
+            muteBadge.appendChild(muteIcon);
+            li.appendChild(muteBadge);
+        }
+
         // Host actions on other players
         if (isHost && !isMe) {
             const actions = document.createElement('div');
@@ -667,6 +754,21 @@ function renderPlayers(playerDocs, hostId) {
                 showConfirmModal('Expulser ' + p.name + ' de la room ?', () => kickPlayer(doc.id, p.name));
             });
             actions.appendChild(kickBtn);
+
+            // Mute chat button
+            const isMuted = (settingsData.mutedUsers || []).includes(doc.id);
+            const muteBtn = document.createElement('button');
+            muteBtn.className = 'player-action-btn mute-btn' + (isMuted ? ' active' : '');
+            muteBtn.title = isMuted ? 'Rétablir le chat' : 'Rendre muet (chat)';
+            muteBtn.innerHTML = isMuted ? '<i data-lucide="mic-off"></i>' : '<i data-lucide="mic"></i>';
+            muteBtn.addEventListener('click', () => {
+                if (isMuted) {
+                    unmutePlayer(doc.id, p.name);
+                } else {
+                    showConfirmModal('Rendre ' + p.name + ' muet dans le chat ?', () => mutePlayer(doc.id, p.name));
+                }
+            });
+            actions.appendChild(muteBtn);
 
             // Ban button
             const banBtn = document.createElement('button');
@@ -736,6 +838,33 @@ async function banPlayer(playerId, playerName) {
     } catch (e) {
         console.error('banPlayer error:', e);
         showToast('Erreur lors du bannissement', 'error');
+    }
+}
+
+async function mutePlayer(playerId, playerName) {
+    if (!currentRoomId || !isHost) return;
+    try {
+        const mutedUsers = [...(settingsData.mutedUsers || [])];
+        if (!mutedUsers.includes(playerId)) mutedUsers.push(playerId);
+        settingsData.mutedUsers = mutedUsers;
+        await db.collection('bingo_rooms').doc(currentRoomId).update({ 'settings.mutedUsers': mutedUsers });
+        showToast(playerName + ' est muet dans le chat', 'success');
+    } catch (e) {
+        console.error('mutePlayer error:', e);
+        showToast('Erreur lors du mute', 'error');
+    }
+}
+
+async function unmutePlayer(playerId, playerName) {
+    if (!currentRoomId || !isHost) return;
+    try {
+        const mutedUsers = (settingsData.mutedUsers || []).filter(id => id !== playerId);
+        settingsData.mutedUsers = mutedUsers;
+        await db.collection('bingo_rooms').doc(currentRoomId).update({ 'settings.mutedUsers': mutedUsers });
+        showToast(playerName + ' peut à nouveau parler', 'success');
+    } catch (e) {
+        console.error('unmutePlayer error:', e);
+        showToast('Erreur lors du unmute', 'error');
     }
 }
 
@@ -1079,6 +1208,29 @@ async function sendChatMessage() {
     const input = document.getElementById('chatInput');
     let text = input.value.trim();
     if (!text) return;
+
+    // Check if muted
+    if ((settingsData.mutedUsers || []).includes(currentUser.uid)) {
+        showToast('Vous êtes muet dans cette room', 'error');
+        return;
+    }
+
+    // Slow mode enforcement
+    if (settingsData.slowMode > 0) {
+        const elapsed = (Date.now() - lastMessageTime) / 1000;
+        const remaining = Math.ceil(settingsData.slowMode - elapsed);
+        if (remaining > 0) {
+            showToast('Mode lent : attendez ' + remaining + 's', 'error');
+            return;
+        }
+    }
+
+    // Max length enforcement
+    const maxLen = settingsData.maxMessageLength || 200;
+    if (text.length > maxLen) {
+        text = text.substring(0, maxLen);
+    }
+
     input.value = '';
     // Apply chat filter if enabled
     if (settingsData.chatFilter) {
@@ -1087,6 +1239,10 @@ async function sendChatMessage() {
     // Clear typing indicator on send
     if (typingDocRef) typingDocRef.delete().catch(() => {});
     clearTimeout(typingTimeout);
+
+    lastMessageTime = Date.now();
+    updateSlowModeUI();
+
     try {
         await db.collection('bingo_rooms').doc(currentRoomId).collection('messages').add({
             uid: currentUser.uid,
@@ -1095,6 +1251,30 @@ async function sendChatMessage() {
             sentAt: firebase.firestore.FieldValue.serverTimestamp()
         });
     } catch(e) { console.error('Error sending chat message:', e); }
+}
+
+function updateSlowModeUI() {
+    if (!settingsData.slowMode || settingsData.slowMode <= 0) return;
+    const input = document.getElementById('chatInput');
+    const btn = document.getElementById('chatSendBtn');
+    if (!input || !btn) return;
+
+    input.disabled = true;
+    btn.disabled = true;
+    let remaining = settingsData.slowMode;
+    input.placeholder = 'Mode lent : ' + remaining + 's...';
+
+    const interval = setInterval(() => {
+        remaining--;
+        if (remaining <= 0) {
+            clearInterval(interval);
+            input.disabled = false;
+            btn.disabled = false;
+            input.placeholder = 'Écrire un message...';
+        } else {
+            input.placeholder = 'Mode lent : ' + remaining + 's...';
+        }
+    }, 1000);
 }
 
 function appendChatMessage(data, container) {

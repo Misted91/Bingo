@@ -68,29 +68,63 @@ function getBingoCategory(n) {
 // ===== CHAT FILTER =====
 const BANNED_WORDS = [
     // FR
-    'merde', 'putain', 'connard', 'connasse', 'enculé', 'enculer', 'salope',
-    'salaud', 'batard', 'bâtard', 'nique', 'niquer', 'ntm', 'ftg', 'fdp',
-    'pute', 'bordel', 'encule', 'pd', 'tg', 'ta gueule', 'ferme ta gueule',
-    'enfoiré', 'enfoire', 'branleur', 'couille', 'couilles', 'bite', 'bites',
-    'chier', 'pétasse', 'petasse', 'cul', 'bouffon', 'bouffonne', 'abruti',
-    'abrutie', 'débile', 'debile', 'gogol', 'mongol', 'attardé', 'attarde',
-    'taré', 'tare', 'crétin', 'cretin', 'ducon', 'naze', 'tocard',
+    'merde', 'putain', 'connard', 'connasse', 'encule', 'enculer', 'salope',
+    'salaud', 'batard', 'nique', 'niquer', 'ntm', 'ftg', 'fdp',
+    'pute', 'bordel', 'pd', 'tg', 'ta gueule', 'ferme ta gueule',
+    'enfoire', 'branleur', 'couille', 'couilles', 'bite', 'bites',
+    'chier', 'petasse', 'cul', 'bouffon', 'bouffonne', 'abruti',
+    'abrutie', 'debile', 'gogol', 'mongol', 'attarde',
+    'tare', 'cretin', 'ducon', 'naze', 'tocard',
     // EN
     'fuck', 'fucking', 'shit', 'bitch', 'asshole', 'bastard', 'damn',
     'dick', 'pussy', 'cunt', 'whore', 'slut', 'nigger', 'nigga',
-    'retard', 'retarded', 'stfu', 'wtf', 'lmfao', 'moron', 'idiot',
+    'retard', 'retarded', 'stfu', 'wtf', 'moron', 'idiot',
     'dumbass', 'jackass', 'motherfucker', 'bullshit'
 ];
+
+// Leet speak substitution map: normalized char → regex pattern matching all variants
+const LEET_MAP = {
+    'a': '[a@4àáâãäå]',
+    'b': '[b8]',
+    'c': '[cç¢(]',
+    'e': '[e3éèêë€]',
+    'g': '[g96]',
+    'i': '[i1!|ïî]',
+    'l': '[l1!|]',
+    'o': '[o0ôöò]',
+    's': '[s$5]',
+    't': '[t7+]',
+    'u': '[uùûü]',
+    'n': '[nñ]'
+};
 
 let _bannedRegex = null;
 function getBannedRegex() {
     if (!_bannedRegex) {
-        const escaped = BANNED_WORDS.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-        _bannedRegex = new RegExp('\\b(' + escaped.join('|') + ')\\b', 'gi');
+        const patterns = BANNED_WORDS.map(word => {
+            // Build a regex pattern for each word, replacing each char with its leet variants
+            let pat = '';
+            for (const ch of word) {
+                if (ch === ' ') {
+                    pat += '\\s+';
+                } else {
+                    const lower = ch.toLowerCase();
+                    pat += LEET_MAP[lower] || ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                }
+            }
+            return pat;
+        });
+        _bannedRegex = new RegExp('(?:^|\\b|\\s)(' + patterns.join('|') + ')(?:\\b|\\s|$)', 'gi');
     }
     return _bannedRegex;
 }
 
 function filterChatMessage(text) {
-    return text.replace(getBannedRegex(), (match) => '*'.repeat(match.length));
+    return text.replace(getBannedRegex(), (match, group) => {
+        // Preserve leading/trailing whitespace from the match, only replace the captured group
+        const start = match.indexOf(group);
+        const before = match.substring(0, start);
+        const after = match.substring(start + group.length);
+        return before + '*'.repeat(group.length) + after;
+    });
 }

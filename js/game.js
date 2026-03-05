@@ -9,7 +9,7 @@ let isHost = false;
 let myGrids = [];         // array of grid arrays (multi-grid support)
 let myMarkedGrids = [];   // array of marked arrays
 let calledNumbers = [];
-let roomSettings = { drawMode: 'manual', drawInterval: 10, gridSize: 5, gridCount: 1, patterns: ['line', 'column', 'diagonal'], calledAnimations: true, bingoValidation: 'auto', chatEnabled: true };
+let roomSettings = { drawMode: 'manual', drawInterval: 10, gridSize: 5, gridCount: 1, patterns: ['line', 'column', 'diagonal'], calledAnimations: true, bingoValidation: 'auto', chatEnabled: true, chatFilter: false, slowMode: 0, maxMessageLength: 200, mutedUsers: [] };
 let roomListener = null;
 let playersListener = null;
 let bingoAlreadyClaimed = false;
@@ -19,6 +19,7 @@ let isDrawing = false;
 let countdownInterval = null;
 let autoDrawCountdown = 0;
 let pendingBingoShownFor = null;
+let lastGameMessageTime = 0;
 
 // ===== INIT =====
 const params = new URLSearchParams(window.location.search);
@@ -33,6 +34,12 @@ document.addEventListener('DOMContentLoaded', () => {
     lucide.createIcons();
 
     document.getElementById('btnQuitGame').addEventListener('click', (e) => {
+        e.preventDefault();
+        showConfirmModal('Quitter la partie en cours ?', () => {
+            window.location.href = './index.html';
+        });
+    });
+    document.getElementById('logoHome').addEventListener('click', (e) => {
         e.preventDefault();
         showConfirmModal('Quitter la partie en cours ?', () => {
             window.location.href = './index.html';
@@ -82,30 +89,39 @@ async function initGame() {
         const player = playerSnap.data();
         calledNumbers = room.calledNumbers || [];
 
-        // Load grids — support new multi-grid format and old single-grid format
-        if (player.grids && player.grids.length > 0) {
-            myGrids = player.grids;
-            myMarkedGrids = (player.markedGrids && player.markedGrids.length > 0)
-                ? player.markedGrids
-                : player.grids.map(() => generateDefaultMarked());
-        } else {
+        // Load grids — support map format, old arrays, and legacy single-grid
+        const gs = roomSettings.gridSize || 5;
+        if (player.gridsMap && Object.keys(player.gridsMap).length > 0) {
+            const keys = Object.keys(player.gridsMap).sort((a, b) => Number(a) - Number(b));
+            myGrids = keys.map(k => player.gridsMap[k]);
+            myMarkedGrids = player.markedMap
+                ? keys.map(k => player.markedMap[k] || generateDefaultMarked(gs))
+                : myGrids.map(() => generateDefaultMarked(gs));
+        } else if (player.grid) {
             myGrids = [player.grid];
-            myMarkedGrids = [player.marked || generateDefaultMarked()];
+            myMarkedGrids = [player.marked || generateDefaultMarked(gs)];
+        } else {
+            myGrids = [generateBingoGrid(gs)];
+            myMarkedGrids = [generateDefaultMarked(gs)];
         }
 
         // Ensure we have enough grids for the configured gridCount
         const needed = roomSettings.gridCount || 1;
-        const gs = roomSettings.gridSize || 5;
         while (myGrids.length < needed) {
             myGrids.push(generateBingoGrid(gs));
             myMarkedGrids.push(generateDefaultMarked(gs));
         }
 
-        // Persist grids if we had to generate new ones
-        if (myGrids.length > (player.grids ? player.grids.length : 1)) {
+        // Persist grids as maps (Firestore doesn't support nested arrays)
+        const gridsMapCount = player.gridsMap ? Object.keys(player.gridsMap).length : 0;
+        if (myGrids.length > gridsMapCount || !player.gridsMap) {
+            const gridsMap = {};
+            const markedMap = {};
+            myGrids.forEach((g, i) => { gridsMap[String(i)] = g; });
+            myMarkedGrids.forEach((m, i) => { markedMap[String(i)] = m; });
             await db.collection('bingo_rooms').doc(roomId)
                 .collection('players').doc(currentUser.uid)
-                .update({ grids: myGrids, markedGrids: myMarkedGrids });
+                .update({ gridsMap, markedMap });
         }
 
         document.getElementById('statusRoomCode').textContent = room.code;
@@ -187,6 +203,11 @@ function listenToRoom() {
         if (room.settings) {
             roomSettings = room.settings;
             applyGameChatVisibility();
+            // Sync max message length to input
+            const chatInput = document.getElementById('chatInput');
+            if (chatInput && roomSettings.maxMessageLength) {
+                chatInput.maxLength = roomSettings.maxMessageLength;
+            }
         }
 
         if (newCalled.length > calledNumbers.length) {
@@ -369,9 +390,11 @@ async function markCell(gridIndex, r, c) {
     cell.classList.add('marked');
 
     try {
+        const markedMap = {};
+        myMarkedGrids.forEach((m, i) => { markedMap[String(i)] = m; });
         await db.collection('bingo_rooms').doc(roomId)
             .collection('players').doc(currentUser.uid)
-            .update({ markedGrids: myMarkedGrids });
+            .update({ markedMap });
     } catch (e) {
         console.error('markCell error:', e);
     }
@@ -812,6 +835,29 @@ async function sendGameChatMessage() {
     const input = document.getElementById('chatInput');
     let text = input.value.trim();
     if (!text) return;
+
+    // Check if muted
+    if ((roomSettings.mutedUsers || []).includes(currentUser.uid)) {
+        showToast('Vous êtes muet dans cette room', 'error');
+        return;
+    }
+
+    // Slow mode enforcement
+    if (roomSettings.slowMode > 0) {
+        const elapsed = (Date.now() - lastGameMessageTime) / 1000;
+        const remaining = Math.ceil(roomSettings.slowMode - elapsed);
+        if (remaining > 0) {
+            showToast('Mode lent : attendez ' + remaining + 's', 'error');
+            return;
+        }
+    }
+
+    // Max length enforcement
+    const maxLen = roomSettings.maxMessageLength || 200;
+    if (text.length > maxLen) {
+        text = text.substring(0, maxLen);
+    }
+
     input.value = '';
     // Apply chat filter if enabled
     if (roomSettings.chatFilter) {
@@ -819,6 +865,10 @@ async function sendGameChatMessage() {
     }
     if (gameTypingDocRef) gameTypingDocRef.delete().catch(() => {});
     clearTimeout(gameTypingTimeout);
+
+    lastGameMessageTime = Date.now();
+    updateGameSlowModeUI();
+
     try {
         await db.collection('bingo_rooms').doc(roomId).collection('messages').add({
             uid: currentUser.uid,
@@ -827,6 +877,30 @@ async function sendGameChatMessage() {
             sentAt: firebase.firestore.FieldValue.serverTimestamp()
         });
     } catch(e) { console.error('Error sending game chat message:', e); }
+}
+
+function updateGameSlowModeUI() {
+    if (!roomSettings.slowMode || roomSettings.slowMode <= 0) return;
+    const input = document.getElementById('chatInput');
+    const btn = document.getElementById('chatSendBtn');
+    if (!input || !btn) return;
+
+    input.disabled = true;
+    btn.disabled = true;
+    let remaining = roomSettings.slowMode;
+    input.placeholder = 'Mode lent : ' + remaining + 's...';
+
+    const interval = setInterval(() => {
+        remaining--;
+        if (remaining <= 0) {
+            clearInterval(interval);
+            input.disabled = false;
+            btn.disabled = false;
+            input.placeholder = 'Message...';
+        } else {
+            input.placeholder = 'Mode lent : ' + remaining + 's...';
+        }
+    }, 1000);
 }
 
 function appendGameChatMessage(data, container) {
