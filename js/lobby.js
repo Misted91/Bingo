@@ -94,7 +94,7 @@ function renderPatternMinis() {
         diagonal: Array.from({length: 25}, (_, i) => i % 6 === 0),         // main diag
         corners:  Array.from({length: 25}, (_, i) => [0,4,20,24].includes(i)),
         fullCard: Array.from({length: 25}, () => true),
-        xPattern: Array.from({length: 25}, (_, i) => i % 6 === 0 || i % 4 === 0 && i > 0 && i < 24)
+        xPattern: Array.from({length: 25}, (_, i) => [0, 4, 6, 8, 12, 16, 18, 20, 24].includes(i))
     };
     document.querySelectorAll('.pattern-mini').forEach(el => {
         const type = el.dataset.pattern;

@@ -74,7 +74,9 @@ async function initGame() {
         // Load grids — support new multi-grid format and old single-grid format
         if (player.grids && player.grids.length > 0) {
             myGrids = player.grids;
-            myMarkedGrids = player.markedGrids || player.grids.map(() => generateDefaultMarked());
+            myMarkedGrids = (player.markedGrids && player.markedGrids.length > 0)
+                ? player.markedGrids
+                : player.grids.map(() => generateDefaultMarked());
         } else {
             myGrids = [player.grid];
             myMarkedGrids = [player.marked || generateDefaultMarked()];
