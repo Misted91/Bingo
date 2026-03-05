@@ -100,6 +100,97 @@
 }
 .copy-btn:hover { background: rgba(124,58,237,0.4); }
 
+/* ===== CODE ROW (toggle visibility) ===== */
+.code-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.code-toggle-btn {
+  width: 40px;
+  height: 40px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--glass-border);
+  border-radius: 50%;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.code-toggle-btn:hover { background: rgba(255,255,255,0.12); color: var(--text); }
+.code-toggle-btn .lucide { width: 1.1rem; height: 1.1rem; }
+.code-masked {
+  -webkit-text-fill-color: var(--text-muted) !important;
+  color: var(--text-muted);
+  letter-spacing: 8px !important;
+  font-size: 2.5rem !important;
+}
+
+/* ===== PUBLIC ROOMS ===== */
+.public-rooms-section {
+  margin-top: 32px;
+}
+.public-rooms-section h3 {
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.public-rooms-section h3 .lucide { width: 1rem; height: 1rem; }
+.public-rooms-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.no-rooms-msg {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  padding: 24px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+}
+.public-room-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(20px);
+  transition: border-color 0.2s;
+}
+.public-room-card:hover { border-color: var(--primary); }
+.public-room-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.public-room-host {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.public-room-code {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  letter-spacing: 2px;
+  font-weight: 600;
+}
+.btn-sm {
+  padding: 6px 14px;
+  font-size: 0.85rem;
+}
+.btn-sm .lucide { width: 0.9rem; height: 0.9rem; }
+
 /* ===== PLAYERS LIST ===== */
 .players-list {
   background: var(--glass);
@@ -223,8 +314,7 @@
   padding: 20px;
   margin-bottom: 24px;
 }
-.settings-panel h3,
-.settings-summary h3 {
+.settings-panel h3 {
   font-size: 0.9rem;
   text-transform: uppercase;
   letter-spacing: 2px;
@@ -390,23 +480,18 @@
   background: rgba(124,58,237,0.4);
 }
 
-/* Settings summary (non-host view) */
-.summary-content {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+/* Settings panel disabled (non-host view) */
+.settings-panel.settings-disabled {
+  opacity: 0.55;
+  pointer-events: none;
+  user-select: none;
 }
-.summary-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 12px;
-  background: rgba(255,255,255,0.04);
-  border-radius: var(--radius-sm);
-  font-size: 0.9rem;
+.settings-panel.settings-disabled .toggle-btn,
+.settings-panel.settings-disabled .count-btn,
+.settings-panel.settings-disabled .pattern-option,
+.settings-panel.settings-disabled input[type="range"] {
+  cursor: not-allowed;
 }
-.summary-item span { color: var(--text-muted); }
-.summary-item strong { color: var(--text); }
 
 @media (max-width: 480px) {
   .patterns-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
@@ -487,3 +572,36 @@
 .chat-input-row input:focus { border-color: var(--primary-light); }
 .chat-send-btn { padding: 8px 14px; border-radius: 50px; }
 .chat-send-btn .lucide { width: 1rem; height: 1rem; }
+
+/* Typing indicator */
+.chat-typing {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-style: italic;
+  min-height: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  padding: 0 4px;
+}
+.chat-typing.visible {
+  min-height: 18px;
+  max-height: 18px;
+  margin-bottom: 6px;
+}
+
+/* Chat disabled message */
+.chat-disabled-msg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px;
+  margin-top: 24px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+.chat-disabled-msg .lucide { width: 1.1rem; height: 1.1rem; }

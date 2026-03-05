@@ -424,6 +424,73 @@
 }
 .sidebar .chat-messages { min-height: 80px; max-height: 140px; }
 
+/* Chat styles shared with game */
+.chat-msg {
+  font-size: 0.88rem;
+  line-height: 1.4;
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.04);
+  border-radius: var(--radius-sm);
+  animation: fadeIn 0.2s ease;
+}
+.chat-msg .chat-author {
+  font-weight: 700;
+  color: var(--primary-light);
+  margin-right: 6px;
+}
+.chat-msg.my-msg .chat-author { color: var(--accent2); }
+.chat-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.chat-input-row input {
+  flex: 1;
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--glass-border);
+  border-radius: 50px;
+  color: var(--text);
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.chat-input-row input:focus { border-color: var(--primary-light); }
+.chat-send-btn { padding: 8px 14px; border-radius: 50px; }
+.chat-send-btn .lucide { width: 1rem; height: 1rem; }
+
+.chat-typing {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-style: italic;
+  min-height: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  padding: 0 4px;
+}
+.chat-typing.visible {
+  min-height: 18px;
+  max-height: 18px;
+  margin-bottom: 6px;
+}
+
+.chat-disabled-msg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  margin-top: 12px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.chat-disabled-msg .lucide { width: 1rem; height: 1rem; }
+
 /* ===== PENDING BINGO PANEL ===== */
 .pending-bingo-panel {
   margin-top: 14px;

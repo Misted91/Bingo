@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <base href="/game/index.html">
+    <base href="./index.html">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BingOnline - En partie !</title>
@@ -125,12 +125,17 @@
                     <div class="sidebar-panel chat-panel" id="chatPanel">
                         <h3><i data-lucide="message-circle"></i> Chat</h3>
                         <div class="chat-messages" id="chatMessages"></div>
+                        <div class="chat-typing" id="chatTyping"></div>
                         <div class="chat-input-row">
                             <input type="text" id="chatInput" placeholder="Message..." maxlength="200" autocomplete="off">
                             <button class="btn btn-primary chat-send-btn" id="chatSendBtn" type="button">
                                 <i data-lucide="send"></i>
                             </button>
                         </div>
+                    </div>
+                    <div class="chat-disabled-msg hidden" id="chatDisabledMsg">
+                        <i data-lucide="message-circle-off"></i>
+                        <span>Le chat a été désactivé par l'hôte</span>
                     </div>
                 </div>
             </div>

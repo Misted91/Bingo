@@ -9,10 +9,12 @@ let isHost = false;
 let myGrids = [];         // array of grid arrays (multi-grid support)
 let myMarkedGrids = [];   // array of marked arrays
 let calledNumbers = [];
-let roomSettings = { drawMode: 'manual', drawInterval: 10, gridCount: 1, patterns: ['line', 'column', 'diagonal'], calledAnimations: true, bingoValidation: 'auto' };
+let roomSettings = { drawMode: 'manual', drawInterval: 10, gridCount: 1, patterns: ['line', 'column', 'diagonal'], calledAnimations: true, bingoValidation: 'auto', chatEnabled: true };
 let roomListener = null;
 let playersListener = null;
 let bingoAlreadyClaimed = false;
+let gameTypingTimeout = null;
+let gameTypingDocRef = null;
 let isDrawing = false;
 let countdownInterval = null;
 let autoDrawCountdown = 0;
@@ -179,6 +181,12 @@ function listenToRoom() {
         }
         const room = snap.data();
         const newCalled = room.calledNumbers || [];
+
+        // Update settings in real-time (e.g. chat toggle)
+        if (room.settings) {
+            roomSettings = room.settings;
+            applyGameChatVisibility();
+        }
 
         if (newCalled.length > calledNumbers.length) {
             calledNumbers = newCalled;
@@ -581,6 +589,24 @@ function handleGameFinished(room) {
     stopAutoDrawTimer();
     sessionStorage.removeItem('bingo_session');
 
+    // Schedule auto-cleanup after 1 minute (host only)
+    if (isHost) {
+        setTimeout(async () => {
+            try {
+                const snap = await db.collection('bingo_rooms').doc(roomId).get();
+                if (snap.exists && snap.data().status === 'finished') {
+                    const playersSnap = await db.collection('bingo_rooms').doc(roomId).collection('players').get();
+                    const batch = db.batch();
+                    playersSnap.docs.forEach(doc => batch.delete(doc.ref));
+                    const messagesSnap = await db.collection('bingo_rooms').doc(roomId).collection('messages').get();
+                    messagesSnap.docs.forEach(doc => batch.delete(doc.ref));
+                    batch.delete(db.collection('bingo_rooms').doc(roomId));
+                    await batch.commit();
+                }
+            } catch (e) { console.error('Auto-cleanup error:', e); }
+        }, 60000);
+    }
+
     const overlay = document.getElementById('winner-overlay');
     const title = document.getElementById('winnerTitle');
     const sub = document.getElementById('winnerSubtitle');
@@ -669,9 +695,24 @@ async function rejectBingo() {
 }
 
 // ===== GAME CHAT =====
+function applyGameChatVisibility() {
+    const chatPanel = document.getElementById('chatPanel');
+    const chatDisabledMsg = document.getElementById('chatDisabledMsg');
+    if (roomSettings.chatEnabled !== false) {
+        if (chatPanel) chatPanel.classList.remove('hidden');
+        if (chatDisabledMsg) chatDisabledMsg.classList.add('hidden');
+    } else {
+        if (chatPanel) chatPanel.classList.add('hidden');
+        if (chatDisabledMsg) chatDisabledMsg.classList.remove('hidden');
+    }
+    lucide.createIcons();
+}
+
 function initGameChat() {
     const messagesEl = document.getElementById('chatMessages');
     if (!messagesEl) return;
+
+    applyGameChatVisibility();
 
     db.collection('bingo_rooms').doc(roomId)
         .collection('messages')
@@ -686,10 +727,57 @@ function initGameChat() {
             messagesEl.scrollTop = messagesEl.scrollHeight;
         });
 
+    // Typing indicator listener
+    db.collection('bingo_rooms').doc(roomId)
+        .collection('typing')
+        .onSnapshot(snap => {
+            const typingEl = document.getElementById('chatTyping');
+            if (!typingEl) return;
+            const now = Date.now();
+            const names = [];
+            snap.docs.forEach(doc => {
+                const data = doc.data();
+                if (doc.id !== currentUser?.uid && data.timestamp) {
+                    const ts = data.timestamp.toMillis ? data.timestamp.toMillis() : data.timestamp;
+                    if (now - ts < 4000) {
+                        names.push(data.name);
+                    }
+                }
+            });
+            if (names.length === 0) {
+                typingEl.textContent = '';
+                typingEl.classList.remove('visible');
+            } else if (names.length === 1) {
+                typingEl.textContent = names[0] + ' écrit...';
+                typingEl.classList.add('visible');
+            } else {
+                typingEl.textContent = names.join(', ') + ' écrivent...';
+                typingEl.classList.add('visible');
+            }
+        });
+
+    gameTypingDocRef = db.collection('bingo_rooms').doc(roomId)
+        .collection('typing').doc(currentUser?.uid);
+
     const input = document.getElementById('chatInput');
     const btn = document.getElementById('chatSendBtn');
     if (btn) btn.addEventListener('click', sendGameChatMessage);
-    if (input) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendGameChatMessage(); } });
+    if (input) {
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendGameChatMessage(); } });
+        input.addEventListener('input', onGameChatTyping);
+    }
+}
+
+function onGameChatTyping() {
+    if (!gameTypingDocRef || !currentUser) return;
+    gameTypingDocRef.set({
+        name: currentUser.displayName,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    }).catch(() => {});
+    clearTimeout(gameTypingTimeout);
+    gameTypingTimeout = setTimeout(() => {
+        if (gameTypingDocRef) gameTypingDocRef.delete().catch(() => {});
+    }, 3000);
 }
 
 async function sendGameChatMessage() {
@@ -698,6 +786,8 @@ async function sendGameChatMessage() {
     const text = input.value.trim();
     if (!text) return;
     input.value = '';
+    if (gameTypingDocRef) gameTypingDocRef.delete().catch(() => {});
+    clearTimeout(gameTypingTimeout);
     try {
         await db.collection('bingo_rooms').doc(roomId).collection('messages').add({
             uid: currentUser.uid,

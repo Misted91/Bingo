@@ -95,6 +95,14 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Public rooms list -->
+            <div class="public-rooms-section" id="publicRoomsSection">
+                <h3><i data-lucide="globe"></i> Parties publiques</h3>
+                <div class="public-rooms-list" id="publicRoomsList">
+                    <p class="no-rooms-msg" id="noRoomsMsg">Aucune partie publique pour le moment</p>
+                </div>
+            </div>
         </div>
 
         <!-- Waiting room -->
@@ -105,7 +113,12 @@
 
             <div class="room-code-display">
                 <p class="code-label">Code de la room</p>
-                <span class="code" id="displayedCode">------</span>
+                <div class="code-row">
+                    <span class="code" id="displayedCode">------</span>
+                    <button class="code-toggle-btn" id="btnToggleCode" type="button" title="Afficher/masquer le code">
+                        <i data-lucide="eye-off" id="toggleCodeIcon"></i>
+                    </button>
+                </div>
                 <p class="code-hint">Partage ce code avec tes amis !</p>
                 <button class="copy-btn" id="btnCopyCode">
                     <i data-lucide="copy"></i> Copier le code
@@ -120,6 +133,32 @@
             <!-- Game settings (host only) -->
             <div class="settings-panel hidden" id="settingsPanel">
                 <h3><i data-lucide="sliders-horizontal"></i> Paramètres de la partie</h3>
+
+                <div class="setting-group">
+                    <label class="setting-label">Visibilité de la room</label>
+                    <div class="toggle-group" id="roomVisibilityToggle">
+                        <button class="toggle-btn active" data-value="private" type="button">
+                            <i data-lucide="lock"></i> Privée
+                        </button>
+                        <button class="toggle-btn" data-value="public" type="button">
+                            <i data-lucide="globe"></i> Publique
+                        </button>
+                    </div>
+                    <p class="setting-hint">Les rooms publiques sont visibles par tous dans le lobby.</p>
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-label">Masquer le code (mode streamer)</label>
+                    <div class="toggle-group" id="hideCodeToggle">
+                        <button class="toggle-btn active" data-value="true" type="button">
+                            <i data-lucide="eye-off"></i> Masqué
+                        </button>
+                        <button class="toggle-btn" data-value="false" type="button">
+                            <i data-lucide="eye"></i> Visible
+                        </button>
+                    </div>
+                    <p class="setting-hint">Masque le code par défaut pour éviter les snipers en stream.</p>
+                </div>
 
                 <div class="setting-group">
                     <label class="setting-label">Mode de tirage</label>
@@ -176,6 +215,18 @@
                 </div>
 
                 <div class="setting-group">
+                    <label class="setting-label">Chat</label>
+                    <div class="toggle-group" id="chatEnabledToggle">
+                        <button class="toggle-btn active" data-value="true" type="button">
+                            <i data-lucide="message-circle"></i> Activé
+                        </button>
+                        <button class="toggle-btn" data-value="false" type="button">
+                            <i data-lucide="message-circle-off"></i> Désactivé
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-group">
                     <label class="setting-label">Patterns gagnants</label>
                     <div class="patterns-grid" id="patternsGrid">
                         <label class="pattern-option">
@@ -224,11 +275,7 @@
                 </div>
             </div>
 
-            <!-- Settings summary (non-host) -->
-            <div class="settings-summary hidden" id="settingsSummary">
-                <h3><i data-lucide="sliders-horizontal"></i> Paramètres de la partie</h3>
-                <div class="summary-content" id="summaryContent"></div>
-            </div>
+
 
             <div class="waiting-actions">
                 <button class="btn btn-success hidden" id="btnStart">
@@ -241,12 +288,17 @@
             <div class="chat-panel" id="chatPanel">
                 <h3><i data-lucide="message-circle"></i> Chat</h3>
                 <div class="chat-messages" id="chatMessages"></div>
+                <div class="chat-typing" id="chatTyping"></div>
                 <div class="chat-input-row">
                     <input type="text" id="chatInput" placeholder="Écrire un message..." maxlength="200" autocomplete="off">
                     <button class="btn btn-primary chat-send-btn" id="chatSendBtn" type="button">
                         <i data-lucide="send"></i>
                     </button>
                 </div>
+            </div>
+            <div class="chat-disabled-msg hidden" id="chatDisabledMsg">
+                <i data-lucide="message-circle-off"></i>
+                <span>Le chat a été désactivé par l'hôte</span>
             </div>
         </div>
 

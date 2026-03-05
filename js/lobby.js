@@ -6,8 +6,12 @@ let currentRoomId = null;
 let currentRoomCode = null;
 let roomListener = null;
 let playersListener = null;
+let publicRoomsListener = null;
 let isHost = false;
 let knownPlayerIds = new Set();
+let codeHidden = true;
+let typingTimeout = null;
+let typingDocRef = null;
 
 // Default game settings
 let settingsData = {
@@ -16,7 +20,10 @@ let settingsData = {
     gridCount: 1,
     patterns: ['line', 'column', 'diagonal'],
     calledAnimations: true,
-    bingoValidation: 'auto'
+    bingoValidation: 'auto',
+    visibility: 'private',
+    hideCode: true,
+    chatEnabled: true
 };
 
 // ===== EVENT LISTENERS =====
@@ -31,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
         leaveRoom();
     });
     document.getElementById('btnCopyCode').addEventListener('click', copyCode);
+    document.getElementById('btnToggleCode').addEventListener('click', toggleCodeVisibility);
     document.getElementById('btnStart').addEventListener('click', startGame);
     document.getElementById('roomCodeInput').addEventListener('input', (e) => {
         e.target.value = e.target.value.toUpperCase();
@@ -38,10 +46,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
     initSettingsUI();
     initRgpdModal();
+    listenToPublicRooms();
 });
 
 // ===== SETTINGS UI =====
 function initSettingsUI() {
+    // Room visibility toggle
+    document.getElementById('roomVisibilityToggle').addEventListener('click', (e) => {
+        const btn = e.target.closest('.toggle-btn');
+        if (!btn) return;
+        document.querySelectorAll('#roomVisibilityToggle .toggle-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        settingsData.visibility = btn.dataset.value;
+        saveSettings();
+    });
+
+    // Hide code toggle
+    document.getElementById('hideCodeToggle').addEventListener('click', (e) => {
+        const btn = e.target.closest('.toggle-btn');
+        if (!btn) return;
+        document.querySelectorAll('#hideCodeToggle .toggle-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        settingsData.hideCode = btn.dataset.value === 'true';
+        applyCodeVisibility();
+        saveSettings();
+    });
+
     // Draw mode toggle
     document.getElementById('drawModeToggle').addEventListener('click', (e) => {
         const btn = e.target.closest('.toggle-btn');
@@ -108,6 +138,17 @@ function initSettingsUI() {
         saveSettings();
     });
 
+    // Chat enabled toggle
+    document.getElementById('chatEnabledToggle').addEventListener('click', (e) => {
+        const btn = e.target.closest('.toggle-btn');
+        if (!btn) return;
+        document.querySelectorAll('#chatEnabledToggle .toggle-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        settingsData.chatEnabled = btn.dataset.value === 'true';
+        applyChatVisibility();
+        saveSettings();
+    });
+
     renderPatternMinis();
 }
 
@@ -146,6 +187,21 @@ function applySettingsToUI(settings) {
     if (!settings) return;
     settingsData = { ...settingsData, ...settings };
 
+    // Room visibility
+    if (settings.visibility) {
+        document.querySelectorAll('#roomVisibilityToggle .toggle-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.value === settings.visibility);
+        });
+    }
+
+    // Hide code
+    if (settings.hideCode !== undefined) {
+        document.querySelectorAll('#hideCodeToggle .toggle-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.value === String(settings.hideCode));
+        });
+        applyCodeVisibility();
+    }
+
     // Draw mode
     document.querySelectorAll('#drawModeToggle .toggle-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.value === settings.drawMode);
@@ -183,30 +239,14 @@ function applySettingsToUI(settings) {
             b.classList.toggle('active', b.dataset.value === settings.bingoValidation);
         });
     }
-}
 
-function updateSettingsSummary(settings) {
-    const content = document.getElementById('summaryContent');
-    if (!content || !settings) return;
-
-    const drawModeText = settings.drawMode === 'auto'
-        ? `Automatique (${settings.drawInterval}s)`
-        : 'Manuel';
-    const patternNames = {
-        line: 'Ligne', column: 'Colonne', diagonal: 'Diagonale',
-        corners: '4 Coins', fullCard: 'Carton plein', xPattern: 'Croix (X)'
-    };
-    const patternsText = (settings.patterns || []).map(p => patternNames[p] || p).join(', ');
-    const animText = settings.calledAnimations === false ? 'Désactivées' : 'Activées';
-    const validationText = settings.bingoValidation === 'manual' ? 'Manuel (vote)' : 'Auto';
-
-    content.innerHTML = `
-        <div class="summary-item"><span>Mode de tirage</span><strong>${drawModeText}</strong></div>
-        <div class="summary-item"><span>Grilles par joueur</span><strong>${settings.gridCount}</strong></div>
-        <div class="summary-item"><span>Animations tirages</span><strong>${animText}</strong></div>
-        <div class="summary-item"><span>Validation Bingo</span><strong>${validationText}</strong></div>
-        <div class="summary-item"><span>Patterns gagnants</span><strong>${patternsText || '-'}</strong></div>
-    `;
+    // Chat enabled
+    if (settings.chatEnabled !== undefined) {
+        document.querySelectorAll('#chatEnabledToggle .toggle-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.value === String(settings.chatEnabled));
+        });
+        applyChatVisibility();
+    }
 }
 
 // ===== VIEW MANAGEMENT =====
@@ -258,6 +298,7 @@ async function createRoom() {
         await roomRef.set({
             code: code,
             host: currentUser.uid,
+            hostName: currentUser.displayName,
             status: 'waiting',
             calledNumbers: [],
             settings: { ...settingsData },
@@ -283,7 +324,8 @@ async function createRoom() {
         document.getElementById('btnStart').classList.remove('hidden');
         document.getElementById('waitingMsg').classList.add('hidden');
         document.getElementById('settingsPanel').classList.remove('hidden');
-        document.getElementById('settingsSummary').classList.add('hidden');
+        document.getElementById('settingsPanel').classList.remove('settings-disabled');
+        applyCodeVisibility();
         showWaitingRoom();
         listenToRoom(roomRef.id);
         initChat(roomRef.id);
@@ -357,17 +399,17 @@ async function joinRoom() {
         document.getElementById('displayedCode').textContent = code;
 
         const btnStart = document.getElementById('btnStart');
+        document.getElementById('settingsPanel').classList.remove('hidden');
         if (isHost) {
             btnStart.classList.remove('hidden');
-            document.getElementById('settingsPanel').classList.remove('hidden');
-            document.getElementById('settingsSummary').classList.add('hidden');
+            document.getElementById('settingsPanel').classList.remove('settings-disabled');
             if (room.settings) applySettingsToUI(room.settings);
         } else {
             btnStart.classList.add('hidden');
-            document.getElementById('settingsPanel').classList.add('hidden');
-            document.getElementById('settingsSummary').classList.remove('hidden');
-            updateSettingsSummary(room.settings || settingsData);
+            document.getElementById('settingsPanel').classList.add('settings-disabled');
+            if (room.settings) applySettingsToUI(room.settings);
         }
+        applyCodeVisibility();
 
         const waitingMsg = document.getElementById('waitingMsg');
         if (isHost) {
@@ -410,9 +452,14 @@ function listenToRoom(roomId) {
                 window.location.href = './game/index.html?room=' + roomId;
             }
 
-            // Update settings summary for non-hosts
+            // Schedule cleanup when game finishes
+            if (room.status === 'finished' && isHost) {
+                scheduleRoomCleanup(roomId);
+            }
+
+            // Update settings UI for non-hosts in real-time
             if (!isHost && room.settings) {
-                updateSettingsSummary(room.settings);
+                applySettingsToUI(room.settings);
             }
         });
 
@@ -420,6 +467,10 @@ function listenToRoom(roomId) {
     playersListener = db.collection('bingo_rooms').doc(roomId).collection('players')
         .onSnapshot((snap) => {
             renderPlayers(snap.docs, cachedHost);
+            // If all players left, schedule cleanup (host triggers it)
+            if (snap.docs.length === 0 && isHost) {
+                scheduleRoomCleanup(roomId);
+            }
         });
 }
 
@@ -507,13 +558,15 @@ function leaveRoomLocal() {
     if (roomListener) { roomListener(); roomListener = null; }
     if (playersListener) { playersListener(); playersListener = null; }
     if (chatListener) { chatListener(); chatListener = null; }
+    if (typingListener) { typingListener(); typingListener = null; }
+    if (typingDocRef) { typingDocRef.delete().catch(() => {}); typingDocRef = null; }
     knownPlayerIds = new Set();
     sessionStorage.removeItem('bingo_session');
     currentRoomId = null;
     currentRoomCode = null;
     isHost = false;
     document.getElementById('settingsPanel').classList.add('hidden');
-    document.getElementById('settingsSummary').classList.add('hidden');
+    document.getElementById('settingsPanel').classList.remove('settings-disabled');
     showLobby();
 }
 
@@ -522,6 +575,128 @@ function copyCode() {
     navigator.clipboard.writeText(currentRoomCode).then(() => {
         showToast('Code copié !', 'success');
     });
+}
+
+// ===== CODE VISIBILITY =====
+function toggleCodeVisibility() {
+    codeHidden = !codeHidden;
+    applyCodeDisplay();
+}
+
+function applyCodeVisibility() {
+    codeHidden = settingsData.hideCode;
+    applyCodeDisplay();
+}
+
+function applyCodeDisplay() {
+    const codeEl = document.getElementById('displayedCode');
+    const icon = document.getElementById('toggleCodeIcon');
+    if (!codeEl) return;
+    if (codeHidden) {
+        codeEl.textContent = '••••••';
+        codeEl.classList.add('code-masked');
+        if (icon) icon.dataset.lucide = 'eye-off';
+    } else {
+        codeEl.textContent = currentRoomCode || '------';
+        codeEl.classList.remove('code-masked');
+        if (icon) icon.dataset.lucide = 'eye';
+    }
+    lucide.createIcons();
+}
+
+// ===== PUBLIC ROOMS =====
+function listenToPublicRooms() {
+    if (publicRoomsListener) publicRoomsListener();
+    publicRoomsListener = db.collection('bingo_rooms')
+        .where('settings.visibility', '==', 'public')
+        .where('status', '==', 'waiting')
+        .onSnapshot(snap => {
+            renderPublicRooms(snap.docs);
+        });
+}
+
+function renderPublicRooms(docs) {
+    const container = document.getElementById('publicRoomsList');
+    const noMsg = document.getElementById('noRoomsMsg');
+    if (!container) return;
+
+    // Remove old room cards (keep noMsg)
+    container.querySelectorAll('.public-room-card').forEach(el => el.remove());
+
+    if (docs.length === 0) {
+        if (noMsg) noMsg.classList.remove('hidden');
+        return;
+    }
+    if (noMsg) noMsg.classList.add('hidden');
+
+    docs.forEach(doc => {
+        const room = doc.data();
+        const card = document.createElement('div');
+        card.className = 'public-room-card';
+
+        const info = document.createElement('div');
+        info.className = 'public-room-info';
+
+        const hostName = document.createElement('span');
+        hostName.className = 'public-room-host';
+        hostName.textContent = room.hostName || 'Hôte inconnu';
+        info.appendChild(hostName);
+
+        const code = document.createElement('span');
+        code.className = 'public-room-code';
+        code.textContent = room.code;
+        info.appendChild(code);
+
+        card.appendChild(info);
+
+        const joinBtn = document.createElement('button');
+        joinBtn.className = 'btn btn-accent btn-sm';
+        joinBtn.innerHTML = '<i data-lucide=\"log-in\"></i> Rejoindre';
+        joinBtn.addEventListener('click', () => joinPublicRoom(doc.id, room.code));
+        card.appendChild(joinBtn);
+
+        container.appendChild(card);
+    });
+
+    lucide.createIcons();
+}
+
+async function joinPublicRoom(roomId, code) {
+    if (!currentUser) { showToast('Connecte-toi d\'abord', 'error'); return; }
+    // Set the code and trigger normal join flow
+    document.getElementById('roomCodeInput').value = code;
+    joinRoom();
+}
+
+// ===== AUTO-CLEANUP =====
+function scheduleRoomCleanup(roomId) {
+    setTimeout(async () => {
+        try {
+            const roomSnap = await db.collection('bingo_rooms').doc(roomId).get();
+            if (!roomSnap.exists) return;
+            const room = roomSnap.data();
+            // Only delete if still finished or if empty
+            if (room.status === 'finished') {
+                await deleteRoomAndSubcollections(roomId);
+            }
+        } catch (e) {
+            console.error('Auto-cleanup error:', e);
+        }
+    }, 60000); // 1 minute
+}
+
+async function deleteRoomAndSubcollections(roomId) {
+    try {
+        const playersSnap = await db.collection('bingo_rooms').doc(roomId).collection('players').get();
+        const batch = db.batch();
+        playersSnap.docs.forEach(doc => batch.delete(doc.ref));
+        const messagesSnap = await db.collection('bingo_rooms').doc(roomId).collection('messages').get();
+        messagesSnap.docs.forEach(doc => batch.delete(doc.ref));
+        batch.delete(db.collection('bingo_rooms').doc(roomId));
+        await batch.commit();
+    } catch (e) {
+        console.error('deleteRoomAndSubcollections error:', e);
+    }
 }
 
 // ===== SESSION REJOIN =====
@@ -544,17 +719,17 @@ async function tryRejoinSession(savedRoomId, savedCode) {
         currentRoomCode = savedCode;
         isHost = room.host === currentUser.uid;
         document.getElementById('displayedCode').textContent = savedCode;
+        document.getElementById('settingsPanel').classList.remove('hidden');
         if (isHost) {
             document.getElementById('btnStart').classList.remove('hidden');
-            document.getElementById('settingsPanel').classList.remove('hidden');
-            document.getElementById('settingsSummary').classList.add('hidden');
+            document.getElementById('settingsPanel').classList.remove('settings-disabled');
             if (room.settings) applySettingsToUI(room.settings);
         } else {
             document.getElementById('btnStart').classList.add('hidden');
-            document.getElementById('settingsPanel').classList.add('hidden');
-            document.getElementById('settingsSummary').classList.remove('hidden');
-            updateSettingsSummary(room.settings || settingsData);
+            document.getElementById('settingsPanel').classList.add('settings-disabled');
+            if (room.settings) applySettingsToUI(room.settings);
         }
+        applyCodeVisibility();
         const waitingMsg = document.getElementById('waitingMsg');
         if (isHost) { waitingMsg.textContent = ''; waitingMsg.classList.add('hidden'); }
         else { waitingMsg.textContent = 'En attente que l\'hôte lance la partie...'; waitingMsg.classList.remove('hidden'); }
@@ -570,11 +745,29 @@ async function tryRejoinSession(savedRoomId, savedCode) {
 
 // ===== CHAT =====
 let chatListener = null;
+let typingListener = null;
+
+function applyChatVisibility() {
+    const chatPanel = document.getElementById('chatPanel');
+    const chatDisabledMsg = document.getElementById('chatDisabledMsg');
+    if (settingsData.chatEnabled) {
+        if (chatPanel) chatPanel.classList.remove('hidden');
+        if (chatDisabledMsg) chatDisabledMsg.classList.add('hidden');
+    } else {
+        if (chatPanel) chatPanel.classList.add('hidden');
+        if (chatDisabledMsg) chatDisabledMsg.classList.remove('hidden');
+    }
+    lucide.createIcons();
+}
 
 function initChat(roomId) {
     if (chatListener) chatListener();
+    if (typingListener) typingListener();
     const messagesEl = document.getElementById('chatMessages');
     if (!messagesEl) return;
+
+    applyChatVisibility();
+
     chatListener = db.collection('bingo_rooms').doc(roomId)
         .collection('messages')
         .orderBy('sentAt', 'asc')
@@ -588,10 +781,58 @@ function initChat(roomId) {
             messagesEl.scrollTop = messagesEl.scrollHeight;
         });
 
+    // Typing indicator — listen to all typing docs
+    typingListener = db.collection('bingo_rooms').doc(roomId)
+        .collection('typing')
+        .onSnapshot(snap => {
+            const typingEl = document.getElementById('chatTyping');
+            if (!typingEl) return;
+            const now = Date.now();
+            const names = [];
+            snap.docs.forEach(doc => {
+                const data = doc.data();
+                if (doc.id !== currentUser?.uid && data.timestamp) {
+                    const ts = data.timestamp.toMillis ? data.timestamp.toMillis() : data.timestamp;
+                    if (now - ts < 4000) {
+                        names.push(data.name);
+                    }
+                }
+            });
+            if (names.length === 0) {
+                typingEl.textContent = '';
+                typingEl.classList.remove('visible');
+            } else if (names.length === 1) {
+                typingEl.textContent = names[0] + ' écrit...';
+                typingEl.classList.add('visible');
+            } else {
+                typingEl.textContent = names.join(', ') + ' écrivent...';
+                typingEl.classList.add('visible');
+            }
+        });
+
+    // Typing doc ref for current user
+    typingDocRef = db.collection('bingo_rooms').doc(roomId)
+        .collection('typing').doc(currentUser?.uid);
+
     const input = document.getElementById('chatInput');
     const btn = document.getElementById('chatSendBtn');
     if (btn) btn.addEventListener('click', sendChatMessage);
-    if (input) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendChatMessage(); } });
+    if (input) {
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendChatMessage(); } });
+        input.addEventListener('input', onChatTyping);
+    }
+}
+
+function onChatTyping() {
+    if (!typingDocRef || !currentUser) return;
+    typingDocRef.set({
+        name: currentUser.displayName,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    }).catch(() => {});
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => {
+        if (typingDocRef) typingDocRef.delete().catch(() => {});
+    }, 3000);
 }
 
 async function sendChatMessage() {
@@ -600,6 +841,9 @@ async function sendChatMessage() {
     const text = input.value.trim();
     if (!text) return;
     input.value = '';
+    // Clear typing indicator on send
+    if (typingDocRef) typingDocRef.delete().catch(() => {});
+    clearTimeout(typingTimeout);
     try {
         await db.collection('bingo_rooms').doc(currentRoomId).collection('messages').add({
             uid: currentUser.uid,
