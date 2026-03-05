@@ -623,6 +623,8 @@ function listenToRoom(roomId) {
             if (!isHost && room.settings) {
                 applySettingsToUI(room.settings);
             }
+        }, err => {
+            console.warn('room listener error:', err.message);
         });
 
     // Real-time listener on players subcollection
@@ -649,6 +651,8 @@ function listenToRoom(roomId) {
                 // Host is present, clear any pending transfer
                 if (hostLeftTimeout) { clearTimeout(hostLeftTimeout); hostLeftTimeout = null; }
             }
+        }, err => {
+            console.warn('players listener error:', err.message);
         });
 }
 
@@ -980,9 +984,14 @@ function listenToPublicRooms() {
     if (publicRoomsListener) publicRoomsListener();
     publicRoomsListener = db.collection('bingo_rooms')
         .where('settings.visibility', '==', 'public')
-        .where('status', 'in', ['waiting', 'playing'])
         .onSnapshot(snap => {
-            renderPublicRooms(snap.docs);
+            const filteredDocs = snap.docs.filter(d => {
+                const s = d.data().status;
+                return s === 'waiting' || s === 'playing';
+            });
+            renderPublicRooms(filteredDocs);
+        }, err => {
+            console.warn('publicRooms listener error:', err.message);
         });
 }
 

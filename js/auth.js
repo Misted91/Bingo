@@ -75,8 +75,12 @@ async function signIn() {
 }
 
 async function signOut() {
-    if (roomListener) roomListener();
-    if (typeof chatListener !== 'undefined' && chatListener) chatListener();
+    if (roomListener) { roomListener(); roomListener = null; }
+    if (typeof playersListener !== 'undefined' && playersListener) { playersListener(); playersListener = null; }
+    if (typeof chatListener !== 'undefined' && chatListener) { chatListener(); chatListener = null; }
+    if (typeof typingListener !== 'undefined' && typingListener) { typingListener(); typingListener = null; }
+    if (typeof publicRoomsListener !== 'undefined' && publicRoomsListener) { publicRoomsListener(); publicRoomsListener = null; }
+    if (typeof typingDocRef !== 'undefined' && typingDocRef) { typingDocRef.delete().catch(() => {}); typingDocRef = null; }
     sessionStorage.removeItem('bingo_session');
     currentRoomId = null;
     currentRoomCode = null;
