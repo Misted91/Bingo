@@ -5,7 +5,9 @@
 let currentRoomId = null;
 let currentRoomCode = null;
 let roomListener = null;
+let playersListener = null;
 let isHost = false;
+let knownPlayerIds = new Set();
 
 // Default game settings
 let settingsData = {
@@ -390,15 +392,19 @@ async function joinRoom() {
 
 function listenToRoom(roomId) {
     if (roomListener) roomListener();
+    if (playersListener) playersListener();
+
+    let cachedHost = null;
 
     roomListener = db.collection('bingo_rooms').doc(roomId)
-        .onSnapshot(async (snap) => {
+        .onSnapshot((snap) => {
             if (!snap.exists) {
                 showToast('La room a été supprimée.', 'error');
                 leaveRoomLocal();
                 return;
             }
             const room = snap.data();
+            cachedHost = room.host;
 
             if (room.status === 'playing') {
                 window.location.href = './game.html?room=' + roomId;
@@ -408,9 +414,12 @@ function listenToRoom(roomId) {
             if (!isHost && room.settings) {
                 updateSettingsSummary(room.settings);
             }
+        });
 
-            const playersSnap = await db.collection('bingo_rooms').doc(roomId).collection('players').get();
-            renderPlayers(playersSnap.docs, room.host);
+    // Real-time listener on players subcollection
+    playersListener = db.collection('bingo_rooms').doc(roomId).collection('players')
+        .onSnapshot((snap) => {
+            renderPlayers(snap.docs, cachedHost);
         });
 }
 
@@ -421,12 +430,15 @@ function renderPlayers(playerDocs, hostId) {
     list.textContent = '';
     count.textContent = playerDocs.length;
 
+    const currentIds = new Set(playerDocs.map(d => d.id));
+
     playerDocs.forEach(doc => {
         const p = doc.data();
         const isThisHost = doc.id === hostId;
+        const isNew = !knownPlayerIds.has(doc.id);
 
         const li = document.createElement('li');
-        li.className = 'player-item';
+        li.className = 'player-item' + (isNew ? ' player-animate' : '');
 
         const img = document.createElement('img');
         img.src = p.photoURL || 'https://api.dicebear.com/7.x/initials/svg?seed=' + p.name;
@@ -450,6 +462,8 @@ function renderPlayers(playerDocs, hostId) {
 
         list.appendChild(li);
     });
+
+    knownPlayerIds = currentIds;
 
     const startBtn = document.getElementById('btnStart');
     if (startBtn && !startBtn.classList.contains('hidden')) {
@@ -491,7 +505,9 @@ async function leaveRoom() {
 
 function leaveRoomLocal() {
     if (roomListener) { roomListener(); roomListener = null; }
+    if (playersListener) { playersListener(); playersListener = null; }
     if (chatListener) { chatListener(); chatListener = null; }
+    knownPlayerIds = new Set();
     sessionStorage.removeItem('bingo_session');
     currentRoomId = null;
     currentRoomCode = null;

@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+    <base href="/index.html">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BingOnline - Lobby</title>
@@ -12,9 +13,11 @@
     <link rel="icon" type="image/x-icon" href="./icon.ico">
 
     <!-- CSS -->
-    <link rel="stylesheet" href="./css/base.css">
-    <link rel="stylesheet" href="./css/components.css">
-    <link rel="stylesheet" href="./css/lobby.css">
+    <script>
+        document.write('<link rel="stylesheet" href="./css/base.css?v=' + Date.now() + '">');
+        document.write('<link rel="stylesheet" href="./css/components.css?v=' + Date.now() + '">');
+        document.write('<link rel="stylesheet" href="./css/lobby.css?v=' + Date.now() + '">');
+    </script>
 
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
