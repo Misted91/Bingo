@@ -292,7 +292,7 @@
 
   .bingo-letter { font-size: 1.2rem; padding: 10px; }
   .bingo-cell { font-size: 1.1rem; }
-  .bingo-cell:hover:not(.marked):not(.free) { transform: none; } /* no hover lift on touch */
+  .bingo-cell:hover:not(.marked):not(.free) { transform: none; }
 
   .sidebar {
     display: grid;
@@ -342,10 +342,15 @@
   .winner-card .trophy { font-size: 3.5rem; margin-bottom: 12px; }
   .winner-card h2 { font-size: 1.4rem; }
   .winner-card p { font-size: 0.9rem; margin-bottom: 16px; }
+
+  .spectator-banner { font-size: 0.8rem; padding: 10px 14px; flex-wrap: wrap; justify-content: center; text-align: center; }
+  .spectator-placeholder { padding: 32px 16px; }
+  .spectator-placeholder p { font-size: 1.2rem; }
+  .spectator-placeholder span { font-size: 0.85rem; }
 }
 
 @media (max-width: 400px) {
-  .game-status-bar { padding: 8px; }
+  .game-status-bar { padding: 8px 10px; }
 
   .bingo-header-row { gap: 3px; margin-bottom: 3px; }
   .bingo-grid { gap: 3px; }
@@ -369,6 +374,16 @@
   .winner-card .trophy { font-size: 3rem; }
   .winner-card h2 { font-size: 1.2rem; }
   .winner-card p { font-size: 0.85rem; }
+  .winner-card .winner-actions { flex-direction: column; gap: 8px; }
+  .winner-card .winner-actions .btn { width: 100%; }
+
+  .chat-msg { font-size: 0.8rem; padding: 5px 8px; }
+  .chat-input-row input { font-size: 0.8rem; padding: 7px 10px; }
+  .chat-send-btn { padding: 7px 12px; }
+
+  .pending-bingo-panel { padding: 10px; }
+  .pending-bingo-panel p { font-size: 0.8rem; }
+  .pending-bingo-actions .btn { padding: 6px 12px; font-size: 0.8rem; }
 }
 
 @media (max-width: 360px) {
@@ -377,6 +392,10 @@
   .bingo-letter { font-size: 0.7rem; padding: 4px; border-radius: 4px; }
   .bingo-cell { font-size: 0.7rem; border-radius: 4px; }
   .bingo-cell.free { font-size: 0.45rem; }
+
+  .sidebar-panel { padding: 10px; }
+  .sidebar-panel h3 { font-size: 0.75rem; margin-bottom: 8px; }
+  .current-number { font-size: 1.8rem; }
 }
 
 /* ===== GAME PAGE VIEWPORT FIT ===== */

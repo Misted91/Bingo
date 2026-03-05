@@ -17,12 +17,13 @@
 .input-group--inline {
   display: flex;
   flex-direction: row;
+  flex-wrap: wrap;
   gap: 10px;
   max-width: 400px;
   margin: 0 auto;
   align-items: center;
 }
-.input-group--inline input { flex: 1; }
+.input-group--inline input { flex: 1; min-width: 0; }
 .public-room-status {
   font-size: 0.7rem;
   font-weight: 700;
@@ -102,15 +103,17 @@
   margin-bottom: 8px;
 }
 .room-code-display .code {
-  font-size: 3.5rem;
+  font-size: clamp(1.8rem, 5vw, 3.5rem);
   font-weight: 900;
-  letter-spacing: 12px;
+  letter-spacing: clamp(4px, 2vw, 12px);
   background: linear-gradient(135deg, var(--primary-light), var(--accent));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   display: block;
   margin: 8px 0;
+  word-break: break-all;
+  overflow-wrap: break-word;
 }
 .room-code-display .code-hint {
   font-size: 0.9rem;
@@ -157,7 +160,7 @@
 .code-toggle-btn:hover { background: rgba(255,255,255,0.12); color: var(--text); }
 .code-toggle-btn .lucide { width: 1.1rem; height: 1.1rem; }
 .code-masked {
-  letter-spacing: 24px !important;
+  letter-spacing: clamp(6px, 3vw, 24px) !important;
 }
 
 /* ===== PUBLIC ROOMS ===== */
@@ -193,6 +196,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
   padding: 14px 18px;
   background: var(--glass);
   border: 1px solid var(--glass-border);
@@ -319,7 +324,6 @@
 
   .waiting-room { max-width: 100%; }
   .room-code-display { padding: 20px; }
-  .room-code-display .code { font-size: 2.5rem; letter-spacing: 8px; }
 
   .players-list { padding: 16px; }
   .player-item { padding: 8px 10px; }
@@ -330,6 +334,10 @@
 
   .waiting-actions { flex-direction: column; align-items: stretch; }
   .waiting-actions .btn { width: 100%; }
+
+  .settings-panel,
+  .settings-summary { padding: 16px; }
+  .toggle-btn { padding: 7px 14px; font-size: 0.85rem; }
 }
 
 @media (max-width: 480px) {
@@ -337,17 +345,19 @@
   .gate-icon { font-size: 2.8rem; }
 
   .lobby-grid { gap: 12px; margin-bottom: 20px; }
+  .lobby-grid > .card { flex: 1 1 100%; }
   .card { padding: 16px; border-radius: var(--radius-sm); }
-  .card:hover { transform: none; } /* disable hover lift on touch */
+  .card:hover { transform: none; }
   .card-icon { width: 40px; height: 40px; border-radius: 10px; margin-bottom: 12px; }
   .card-icon .lucide { width: 1.1rem; height: 1.1rem; }
   .card h2 { font-size: 1rem; }
   .card p { font-size: 0.85rem; margin-bottom: 14px; line-height: 1.5; }
 
   .room-code-display { padding: 16px; border-radius: var(--radius-sm); }
-  .room-code-display .code { font-size: 2rem; letter-spacing: 6px; }
   .room-code-display .code-label { font-size: 0.8rem; letter-spacing: 1px; }
   .room-code-display .code-hint { font-size: 0.8rem; }
+  .code-row { gap: 8px; }
+  .code-toggle-btn { width: 34px; height: 34px; }
   .copy-btn { font-size: 0.8rem; padding: 6px 14px; }
 
   .players-list { padding: 14px; border-radius: var(--radius-sm); margin-bottom: 16px; }
@@ -359,6 +369,23 @@
   .player-actions { gap: 3px; }
   .player-action-btn { width: 24px; height: 24px; border-radius: 5px; }
   .player-action-btn .lucide { width: 12px; height: 12px; }
+
+  .settings-panel,
+  .settings-summary { padding: 14px; border-radius: var(--radius-sm); }
+  .setting-group { margin-bottom: 16px; }
+  .toggle-group { gap: 6px; padding: 3px; border-radius: 12px; }
+  .toggle-btn { padding: 6px 12px; font-size: 0.8rem; gap: 4px; }
+  .count-btn { width: 40px; height: 40px; font-size: 1rem; }
+  .patterns-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .pattern-card { padding: 8px 4px; font-size: 0.75rem; }
+  .pattern-mini { width: 28px; height: 28px; }
+
+  .public-room-card { padding: 12px 14px; }
+  .public-room-host { font-size: 0.9rem; }
+  .public-room-code { font-size: 0.75rem; }
+
+  .input-group--inline { flex-direction: column; }
+  .input-group--inline .btn { width: 100%; }
 }
 
 @media (max-width: 360px) {
@@ -369,10 +396,11 @@
   .card h2 { font-size: 0.95rem; }
   .card p { font-size: 0.8rem; }
 
-  .room-code-display .code { font-size: 1.6rem; letter-spacing: 4px; }
-
   .player-item img { width: 24px; height: 24px; }
   .player-item .player-name { font-size: 0.8rem; }
+
+  .toggle-btn { padding: 5px 10px; font-size: 0.75rem; }
+  .count-btn { width: 36px; height: 36px; font-size: 0.9rem; }
 }
 
 /* ===== SETTINGS PANEL ===== */
@@ -415,11 +443,13 @@
 /* Toggle group (draw mode) */
 .toggle-group {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   background: rgba(255,255,255,0.05);
-  border-radius: 50px;
+  border-radius: 16px;
   padding: 4px;
   width: fit-content;
+  max-width: 100%;
 }
 .toggle-btn {
   display: inline-flex;
@@ -469,6 +499,7 @@
 /* Count buttons (grids per player) */
 .count-btns {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 .count-btn {
@@ -562,14 +593,6 @@
 .settings-panel.settings-disabled .pattern-option,
 .settings-panel.settings-disabled input[type="range"] {
   cursor: not-allowed;
-}
-
-@media (max-width: 480px) {
-  .patterns-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
-  .pattern-card { padding: 8px 4px; font-size: 0.75rem; }
-  .pattern-mini { width: 28px; height: 28px; }
-  .toggle-btn { padding: 7px 14px; font-size: 0.85rem; }
-  .count-btn { width: 40px; height: 40px; font-size: 1rem; }
 }
 
 /* ===== SETTING HINT ===== */
