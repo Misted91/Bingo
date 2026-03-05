@@ -895,14 +895,15 @@ async function startGame() {
 async function leaveRoom() {
     if (!currentRoomId || !currentUser) { leaveRoomLocal(); return; }
     const roomIdToClean = currentRoomId;
+    const wasHost = isHost;
     try {
         await db.collection('bingo_rooms').doc(currentRoomId)
             .collection('players').doc(currentUser.uid).delete();
 
-        // Check if room is now empty — schedule cleanup regardless of host status
+        // If room is empty, delete it immediately (while we still have auth)
         const remainingSnap = await db.collection('bingo_rooms').doc(roomIdToClean).collection('players').get();
         if (remainingSnap.empty) {
-            scheduleRoomCleanup(roomIdToClean);
+            await deleteRoomAndSubcollections(roomIdToClean);
         }
     } catch (e) {
         console.error('leaveRoom error:', e);
@@ -1044,21 +1045,17 @@ async function joinPublicRoom(roomId, code) {
 }
 
 // ===== AUTO-CLEANUP =====
-function scheduleRoomCleanup(roomId) {
-    setTimeout(async () => {
-        try {
-            const roomSnap = await db.collection('bingo_rooms').doc(roomId).get();
-            if (!roomSnap.exists) return;
-            const room = roomSnap.data();
-            // Delete if finished, or if room is empty
-            const playersSnap = await db.collection('bingo_rooms').doc(roomId).collection('players').get();
-            if (room.status === 'finished' || playersSnap.empty) {
-                await deleteRoomAndSubcollections(roomId);
-            }
-        } catch (e) {
-            console.error('Auto-cleanup error:', e);
+async function scheduleRoomCleanup(roomId) {
+    try {
+        const roomSnap = await db.collection('bingo_rooms').doc(roomId).get();
+        if (!roomSnap.exists) return;
+        const playersSnap = await db.collection('bingo_rooms').doc(roomId).collection('players').get();
+        if (playersSnap.empty) {
+            await deleteRoomAndSubcollections(roomId);
         }
-    }, 60000); // 1 minute
+    } catch (e) {
+        // Silently fail — permissions may be insufficient if user left the room
+    }
 }
 
 async function deleteRoomAndSubcollections(roomId) {
@@ -1128,12 +1125,15 @@ let typingListener = null;
 function applyChatVisibility() {
     const chatPanel = document.getElementById('chatPanel');
     const chatDisabledMsg = document.getElementById('chatDisabledMsg');
+    const chatSubSettings = document.getElementById('chatSubSettings');
     if (settingsData.chatEnabled) {
         if (chatPanel) chatPanel.classList.remove('hidden');
         if (chatDisabledMsg) chatDisabledMsg.classList.add('hidden');
+        if (chatSubSettings) chatSubSettings.classList.remove('hidden');
     } else {
         if (chatPanel) chatPanel.classList.add('hidden');
         if (chatDisabledMsg) chatDisabledMsg.classList.remove('hidden');
+        if (chatSubSettings) chatSubSettings.classList.add('hidden');
     }
     lucide.createIcons();
 }
