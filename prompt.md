@@ -76,3 +76,5 @@ service cloud.firestore {
   }
 }
 ```
+
+je veux pouvoir spec une game sans y jouer si la game est déjà lancée, si je ne suis pas connecté je veux pouvoir spec les games sans rien pouvoir faire par contre si je suis connecté et que je suis en spec je veux pouvoir parler dans le chat sans jouer, quand je quitte une room ça me remet dedans même si je met oui je veux quitter la room, je veux pouvoir unmute une personne
