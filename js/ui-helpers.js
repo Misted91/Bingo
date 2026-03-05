@@ -22,12 +22,17 @@ function setButtonLoading(btn, text) {
 let toastTimeout;
 function showToast(msg, type = 'info') {
     const t = document.getElementById('toast');
-    const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+    const iconNames = { success: 'circle-check', error: 'circle-x', info: 'info' };
     t.textContent = '';
-    const iconSpan = document.createElement('span');
-    iconSpan.textContent = icons[type] || 'ℹ️';
-    t.appendChild(iconSpan);
+    const iconEl = document.createElement('i');
+    iconEl.dataset.lucide = iconNames[type] || 'info';
+    iconEl.style.width = '1em';
+    iconEl.style.height = '1em';
+    iconEl.style.verticalAlign = 'middle';
+    iconEl.style.flexShrink = '0';
+    t.appendChild(iconEl);
     t.append(' ' + msg);
+    lucide.createIcons();
     t.className = 'show ' + type;
     clearTimeout(toastTimeout);
     toastTimeout = setTimeout(() => t.classList.remove('show'), 3500);

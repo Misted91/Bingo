@@ -306,9 +306,22 @@ function showGameContainer() {
 function startAutoDrawTimer() {
     if (!isHost || roomSettings.drawMode !== 'auto') return;
     stopAutoDrawTimer();
+    const maxNum = getMaxNumber(roomSettings.gridSize);
+    if (calledNumbers.length >= maxNum) {
+        const row = document.querySelector('.auto-draw-countdown');
+        if (row) row.innerHTML = '<strong>Tous les numéros ont été tirés</strong>';
+        return;
+    }
     autoDrawCountdown = roomSettings.drawInterval;
     updateAutoDrawDisplay();
     countdownInterval = setInterval(() => {
+        const maxNum = getMaxNumber(roomSettings.gridSize);
+        if (calledNumbers.length >= maxNum) {
+            stopAutoDrawTimer();
+            const row = document.querySelector('.auto-draw-countdown');
+            if (row) row.innerHTML = '<strong>Tous les numéros ont été tirés</strong>';
+            return;
+        }
         autoDrawCountdown--;
         updateAutoDrawDisplay();
         if (autoDrawCountdown <= 0) {
@@ -327,7 +340,11 @@ function stopAutoDrawTimer() {
 
 function updateAutoDrawDisplay() {
     const el = document.getElementById('autoDrawCountdown');
-    if (el) el.textContent = autoDrawCountdown + 's';
+    if (!el) return;
+    const countdownRow = el.closest('.auto-draw-countdown');
+    if (countdownRow) {
+        countdownRow.innerHTML = 'Prochain tirage dans <strong><span id="autoDrawCountdown">' + autoDrawCountdown + 's</span></strong>';
+    }
 }
 
 // ===== REAL-TIME LISTENERS =====
@@ -766,17 +783,49 @@ function checkBingo() {
 function updateBingoButton() {
     const unclaimed = checkBingo();
     const btn = document.getElementById('btnBingo');
-    // Clear previous winning highlights
-    document.querySelectorAll('.bingo-cell.winning').forEach(el => el.classList.remove('winning'));
+    // Always hide the button — bingo is claimed by clicking winning cells
+    btn.classList.add('hidden');
+
+    // Clear previous winning/claimed highlights and click handlers
+    document.querySelectorAll('.bingo-cell.winning').forEach(el => {
+        el.classList.remove('winning');
+        el.removeEventListener('click', onWinningCellClick);
+    });
+    document.querySelectorAll('.bingo-cell.claimed-bingo').forEach(el => el.classList.remove('claimed-bingo'));
+
+    // Highlight already claimed bingos with static yellow
+    highlightClaimedBingos();
+
     if (unclaimed.length > 0 && !claimingInProgress) {
-        btn.classList.remove('hidden');
-        highlightWinningCells(unclaimed[0]);
-    } else {
-        btn.classList.add('hidden');
+        highlightWinningCells(unclaimed[0], 'winning');
+        // Make winning cells clickable to claim bingo
+        document.querySelectorAll('.bingo-cell.winning').forEach(el => {
+            el.addEventListener('click', onWinningCellClick);
+        });
     }
 }
 
-function highlightWinningCells(bingo) {
+function onWinningCellClick(e) {
+    e.stopPropagation();
+    claimBingo();
+}
+
+function highlightClaimedBingos() {
+    const size = roomSettings.gridSize || 5;
+    const count = Math.min(myGrids.length, roomSettings.gridCount || 1);
+    for (let g = 0; g < count; g++) {
+        const results = checkBingoForGrid(myMarkedGrids[g], roomSettings.patterns);
+        for (const r of results) {
+            const key = r.type + '-' + r.index + '-' + g;
+            if (myClaimedBingos.includes(key)) {
+                highlightWinningCells({ ...r, gridIndex: g }, 'claimed-bingo');
+            }
+        }
+    }
+}
+
+function highlightWinningCells(bingo, cssClass) {
+    cssClass = cssClass || 'winning';
     const size = roomSettings.gridSize || 5;
     const g = bingo.gridIndex !== undefined ? bingo.gridIndex : 0;
     const cells = [];
@@ -801,7 +850,7 @@ function highlightWinningCells(bingo) {
     }
     cells.forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.classList.add('winning');
+        if (el) el.classList.add(cssClass);
     });
 }
 
@@ -813,6 +862,10 @@ async function claimBingo() {
         return;
     }
     claimingInProgress = true;
+    // Remove click handlers from winning cells while claiming
+    document.querySelectorAll('.bingo-cell.winning').forEach(el => {
+        el.removeEventListener('click', onWinningCellClick);
+    });
     document.getElementById('btnBingo').classList.add('hidden');
 
     const bingo = unclaimed[0];
@@ -886,7 +939,7 @@ async function processNewBingo(patternType, claimerUid, claimerName) {
             winners: winners
         });
     } else if (!allCompleted) {
-        showToast('🎉 BINGO ! (' + (patternLabels[patternType] || patternType) + ') — La partie continue...', 'success');
+        showToast('BINGO ! (' + (patternLabels[patternType] || patternType) + ') — La partie continue...', 'success');
     }
 }
 
@@ -958,10 +1011,16 @@ function renderPatternsProgress(completedPatterns) {
     enabled.forEach(p => {
         const item = document.createElement('div');
         item.className = 'pattern-item' + (completed.includes(p) ? ' completed' : '');
-        const icon = completed.includes(p) ? '✅' : '⬜';
-        item.textContent = icon + ' ' + (patternLabels[p] || p);
+        const iconEl = document.createElement('i');
+        iconEl.dataset.lucide = completed.includes(p) ? 'circle-check' : 'square';
+        iconEl.style.width = '0.9em';
+        iconEl.style.height = '0.9em';
+        iconEl.style.verticalAlign = 'middle';
+        item.appendChild(iconEl);
+        item.append(' ' + (patternLabels[p] || p));
         container.appendChild(item);
     });
+    lucide.createIcons();
 }
 
 function renderCalledNumbers() {
@@ -1004,7 +1063,16 @@ function renderPlayersStatus(playerDocs) {
 
         const nameSpan = document.createElement('span');
         nameSpan.className = 'ps-name';
-        nameSpan.textContent = p.name + (isMe ? ' 👤' : '');
+        nameSpan.textContent = p.name;
+        if (isMe) {
+            const meIcon = document.createElement('i');
+            meIcon.dataset.lucide = 'user';
+            meIcon.style.width = '0.85em';
+            meIcon.style.height = '0.85em';
+            meIcon.style.verticalAlign = 'middle';
+            meIcon.style.marginLeft = '4px';
+            nameSpan.appendChild(meIcon);
+        }
 
         // Make player name clickable for spectators
         if (isSpectator) {
@@ -1117,7 +1185,13 @@ function handleGameFinished(room) {
         const isMe = currentUser && w.uid === currentUser.uid;
         if (isMe) {
             title.textContent = '';
-            title.append('🎊 BINGO ! ');
+            const confettiIcon = document.createElement('i');
+            confettiIcon.dataset.lucide = 'party-popper';
+            confettiIcon.style.width = '1.2em';
+            confettiIcon.style.height = '1.2em';
+            confettiIcon.style.verticalAlign = 'middle';
+            title.appendChild(confettiIcon);
+            title.append(' BINGO ! ');
             const winSpan = document.createElement('span');
             winSpan.textContent = 'Tu as gagné !';
             title.appendChild(winSpan);
@@ -1125,7 +1199,7 @@ function handleGameFinished(room) {
             launchConfetti();
         } else {
             title.textContent = 'Partie terminée !';
-            sub.textContent = (w.name || 'Un joueur') + ' gagne avec ' + w.count + ' bingo' + (w.count > 1 ? 's' : '') + ' ! 🎉';
+            sub.textContent = (w.name || 'Un joueur') + ' gagne avec ' + w.count + ' bingo' + (w.count > 1 ? 's' : '') + ' !';
         }
     } else {
         // Multiple winners (tie)
@@ -1134,7 +1208,13 @@ function handleGameFinished(room) {
         const count = winners[0].count;
         if (isMe) {
             title.textContent = '';
-            title.append('🎊 Égalité ! ');
+            const confettiIcon = document.createElement('i');
+            confettiIcon.dataset.lucide = 'party-popper';
+            confettiIcon.style.width = '1.2em';
+            confettiIcon.style.height = '1.2em';
+            confettiIcon.style.verticalAlign = 'middle';
+            title.appendChild(confettiIcon);
+            title.append(' Égalité ! ');
             const winSpan = document.createElement('span');
             winSpan.textContent = 'Tu fais partie des gagnants !';
             title.appendChild(winSpan);
@@ -1142,11 +1222,12 @@ function handleGameFinished(room) {
             launchConfetti();
         } else {
             title.textContent = 'Partie terminée — Égalité !';
-            sub.textContent = names + ' gagnent avec ' + count + ' bingo' + (count > 1 ? 's' : '') + ' chacun ! 🎉';
+            sub.textContent = names + ' gagnent avec ' + count + ' bingo' + (count > 1 ? 's' : '') + ' chacun !';
         }
     }
 
     overlay.classList.add('show');
+    lucide.createIcons();
 }
 
 // ===== CONFETTI =====

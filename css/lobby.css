@@ -637,6 +637,7 @@
   min-height: 120px;
   max-height: 180px;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -651,7 +652,10 @@
   border-radius: var(--radius-sm);
   animation: fadeIn 0.2s ease;
   word-break: break-word;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 .chat-msg .chat-author {
   font-weight: 700;
