@@ -449,7 +449,7 @@ function listenToRoom(roomId) {
             cachedHost = room.host;
 
             if (room.status === 'playing') {
-                window.location.href = './game/index.html?room=' + roomId;
+                window.location.href = './game.html?room=' + roomId;
             }
 
             // Schedule cleanup when game finishes
@@ -711,7 +711,7 @@ async function tryRejoinSession(savedRoomId, savedCode) {
             .collection('players').doc(currentUser.uid).get();
         if (!playerSnap.exists) { sessionStorage.removeItem('bingo_session'); return; }
         if (room.status === 'playing') {
-            window.location.href = './game/index.html?room=' + savedRoomId;
+            window.location.href = './game.html?room=' + savedRoomId;
             return;
         }
         // Restore waiting room state
