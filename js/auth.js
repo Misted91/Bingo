@@ -10,6 +10,7 @@ auth.onAuthStateChanged(user => {
     renderAuthArea(user);
     if (user) {
         showLobby();
+        listenToPublicRooms();
         const saved = sessionStorage.getItem('bingo_session');
         if (saved) {
             try {

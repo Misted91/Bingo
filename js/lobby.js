@@ -101,7 +101,6 @@ document.addEventListener('DOMContentLoaded', () => {
     initSettingsUI();
     applySettingsToUI(settingsData);
     initRgpdModal();
-    listenToPublicRooms();
 });
 
 // ===== SETTINGS UI =====
@@ -463,6 +462,7 @@ async function createRoom() {
 
         document.getElementById('displayedCode').textContent = formatCode(code);
         document.getElementById('waitingMsg').classList.add('hidden');
+        document.getElementById('btnStart').classList.remove('hidden');
         document.getElementById('settingsPanel').classList.remove('hidden');
         document.getElementById('settingsPanel').classList.remove('settings-disabled');
         applyCodeVisibility();
