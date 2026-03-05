@@ -89,10 +89,10 @@ async function initGame() {
         const player = playerSnap.data();
         calledNumbers = room.calledNumbers || [];
 
-        // Load grids — support map format, old arrays, and legacy single-grid
+        // Load grids — support map format and legacy single-grid
         const gs = roomSettings.gridSize || 5;
         if (player.gridsMap && Object.keys(player.gridsMap).length > 0) {
-            const keys = Object.keys(player.gridsMap).sort((a, b) => Number(a) - Number(b));
+            const keys = Object.keys(player.gridsMap).sort();
             myGrids = keys.map(k => player.gridsMap[k]);
             myMarkedGrids = player.markedMap
                 ? keys.map(k => player.markedMap[k] || generateDefaultMarked(gs))
@@ -112,15 +112,15 @@ async function initGame() {
             myMarkedGrids.push(generateDefaultMarked(gs));
         }
 
-        // Persist grids as maps (Firestore doesn't support nested arrays)
+        // Persist grids as maps (keys prefixed to avoid Firestore treating object as array)
         const gridsMapCount = player.gridsMap ? Object.keys(player.gridsMap).length : 0;
         if (myGrids.length > gridsMapCount || !player.gridsMap) {
             const gridsMap = {};
             const markedMap = {};
-            myGrids.forEach((g, i) => { gridsMap[String(i)] = g; });
-            myMarkedGrids.forEach((m, i) => { markedMap[String(i)] = m; });
+            myGrids.forEach((g, i) => { gridsMap['g' + i] = g; });
+            myMarkedGrids.forEach((m, i) => { markedMap['g' + i] = m; });
             const updateData = { gridsMap, markedMap };
-            // Remove legacy nested array fields that cause Firestore errors
+            // Remove legacy nested array fields
             if (player.grids) updateData.grids = firebase.firestore.FieldValue.delete();
             if (player.markedGrids) updateData.markedGrids = firebase.firestore.FieldValue.delete();
             await db.collection('bingo_rooms').doc(roomId)
@@ -446,7 +446,7 @@ async function markCell(gridIndex, r, c) {
 
     try {
         const markedMap = {};
-        myMarkedGrids.forEach((m, i) => { markedMap[String(i)] = m; });
+        myMarkedGrids.forEach((m, i) => { markedMap['g' + i] = m; });
         await db.collection('bingo_rooms').doc(roomId)
             .collection('players').doc(currentUser.uid)
             .update({ markedMap });
