@@ -13,10 +13,12 @@ let codeHidden = true;
 let typingTimeout = null;
 let typingDocRef = null;
 let hostLeftTimeout = null;
+let reMaskTimeout = null;
 let lastMessageTime = 0;
 
 // Default game settings
 const DEFAULT_SETTINGS = {
+    roomName: '',
     drawMode: 'manual',
     drawInterval: 10,
     gridSize: 5,
@@ -100,11 +102,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     initSettingsUI();
     applySettingsToUI(settingsData);
+    renderBanList();
     initRgpdModal();
 });
 
 // ===== SETTINGS UI =====
 function initSettingsUI() {
+    // Room name input
+    const roomNameInput = document.getElementById('roomNameInput');
+    if (roomNameInput) {
+        roomNameInput.addEventListener('input', () => {
+            settingsData.roomName = roomNameInput.value.trim().substring(0, 30);
+            saveSettings();
+        });
+    }
+
     // Room visibility toggle
     document.getElementById('roomVisibilityToggle').addEventListener('click', (e) => {
         const btn = e.target.closest('.toggle-btn');
@@ -280,6 +292,12 @@ function applySettingsToUI(settings) {
     if (!settings) return;
     settingsData = { ...settingsData, ...settings };
 
+    // Room name
+    const roomNameInput = document.getElementById('roomNameInput');
+    if (roomNameInput && settings.roomName !== undefined) {
+        roomNameInput.value = settings.roomName || '';
+    }
+
     // Room visibility
     if (settings.visibility) {
         document.querySelectorAll('#roomVisibilityToggle .toggle-btn').forEach(b => {
@@ -438,7 +456,7 @@ async function createRoom() {
             hostName: currentUser.displayName,
             status: 'waiting',
             calledNumbers: [],
-            bannedUsers: [],
+            bannedUsers: getLocalBanList().map(b => b.uid),
             hostLeftAt: null,
             settings: { ...settingsData },
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -854,18 +872,83 @@ async function kickPlayer(playerId, playerName) {
 async function banPlayer(playerId, playerName) {
     if (!currentRoomId || !isHost) return;
     try {
-        // Add to ban list
+        // Add to ban list in Firestore
         await db.collection('bingo_rooms').doc(currentRoomId).update({
             bannedUsers: firebase.firestore.FieldValue.arrayUnion(playerId)
         });
+        // Persist in localStorage
+        saveBanToLocal(playerId, playerName);
         // Then remove from players
         await db.collection('bingo_rooms').doc(currentRoomId)
             .collection('players').doc(playerId).delete();
         showToast(playerName + ' a été banni', 'success');
+        renderBanList();
     } catch (e) {
         console.error('banPlayer error:', e);
         showToast('Erreur lors du bannissement', 'error');
     }
+}
+
+function getLocalBanList() {
+    try {
+        return JSON.parse(localStorage.getItem('bingo_bans') || '[]');
+    } catch { return []; }
+}
+
+function saveBanToLocal(uid, name) {
+    const list = getLocalBanList();
+    if (!list.find(b => b.uid === uid)) {
+        list.push({ uid, name });
+        localStorage.setItem('bingo_bans', JSON.stringify(list));
+    }
+}
+
+function removeBanFromLocal(uid) {
+    const list = getLocalBanList().filter(b => b.uid !== uid);
+    localStorage.setItem('bingo_bans', JSON.stringify(list));
+}
+
+async function unbanPlayer(uid, name) {
+    // Remove from localStorage
+    removeBanFromLocal(uid);
+    // Remove from Firestore room if in a room
+    if (currentRoomId && isHost) {
+        try {
+            await db.collection('bingo_rooms').doc(currentRoomId).update({
+                bannedUsers: firebase.firestore.FieldValue.arrayRemove(uid)
+            });
+        } catch (e) { console.error('unbanPlayer error:', e); }
+    }
+    showToast((name || 'Joueur') + ' a été débanni', 'success');
+    renderBanList();
+}
+
+function renderBanList() {
+    const container = document.getElementById('banListContainer');
+    if (!container) return;
+    const bans = getLocalBanList();
+    container.textContent = '';
+    if (bans.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'setting-hint';
+        empty.textContent = 'Aucun joueur banni.';
+        container.appendChild(empty);
+        return;
+    }
+    bans.forEach(b => {
+        const item = document.createElement('div');
+        item.className = 'ban-item';
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'ban-name';
+        nameSpan.textContent = b.name || b.uid;
+        item.appendChild(nameSpan);
+        const unbanBtn = document.createElement('button');
+        unbanBtn.className = 'btn btn-sm btn-outline';
+        unbanBtn.textContent = 'Débannir';
+        unbanBtn.addEventListener('click', () => unbanPlayer(b.uid, b.name));
+        item.appendChild(unbanBtn);
+        container.appendChild(item);
+    });
 }
 
 async function mutePlayer(playerId, playerName) {
@@ -947,6 +1030,10 @@ function leaveRoomLocal() {
 
 function copyCode() {
     if (!currentRoomCode) return;
+    if (settingsData.hideCode && codeHidden) {
+        showToast('Révèle le code d\'abord', 'error');
+        return;
+    }
     navigator.clipboard.writeText(currentRoomCode).then(() => {
         showToast('Code copié !', 'success');
     });
@@ -956,6 +1043,13 @@ function copyCode() {
 function toggleCodeVisibility() {
     codeHidden = !codeHidden;
     applyCodeDisplay();
+    if (reMaskTimeout) clearTimeout(reMaskTimeout);
+    if (!codeHidden && settingsData.hideCode) {
+        reMaskTimeout = setTimeout(() => {
+            codeHidden = true;
+            applyCodeDisplay();
+        }, 5000);
+    }
 }
 
 function applyCodeVisibility() {
@@ -1037,7 +1131,8 @@ function renderPublicRooms(docs) {
 
         const hostName = document.createElement('span');
         hostName.className = 'public-room-host';
-        hostName.textContent = room.hostName || 'Hôte inconnu';
+        const displayName = (room.settings && room.settings.roomName) || room.hostName || 'Hôte inconnu';
+        hostName.textContent = displayName;
         info.appendChild(hostName);
 
         const status = document.createElement('span');
@@ -1047,8 +1142,8 @@ function renderPublicRooms(docs) {
 
         const code = document.createElement('span');
         code.className = 'public-room-code';
-        code.textContent = room.code;
-        info.appendChild(code);
+        code.textContent = (room.settings && room.settings.hideCode) ? '' : room.code;
+        if (!(room.settings && room.settings.hideCode)) info.appendChild(code);
 
         card.appendChild(info);
 

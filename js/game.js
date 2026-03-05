@@ -107,7 +107,7 @@ async function initGame() {
             isSpectator = true;
             isHost = false;
             calledNumbers = room.calledNumbers || [];
-            document.getElementById('statusRoomCode').textContent = room.code;
+            document.getElementById('statusRoomCode').textContent = roomSettings.hideCode ? (roomSettings.roomName || '••••••••') : (roomSettings.roomName || room.code);
 
             const spectatorBanner = document.getElementById('spectatorBanner');
             if (spectatorBanner) spectatorBanner.classList.remove('hidden');
@@ -187,7 +187,7 @@ async function initGame() {
                 .update(updateData);
         }
 
-        document.getElementById('statusRoomCode').textContent = room.code;
+        document.getElementById('statusRoomCode').textContent = roomSettings.hideCode ? (roomSettings.roomName || '••••••••') : (roomSettings.roomName || room.code);
         sessionStorage.setItem('bingo_session', JSON.stringify({ roomId, roomCode: room.code }));
 
         if (isHost) {
@@ -235,7 +235,7 @@ async function quitGame() {
     window.location.href = './index.html';
 }
 
-// ===== GAME MUTE/UNMUTE =====
+// ===== GAME MUTE/UNMUTE/KICK/BAN =====
 async function gameMutePlayer(playerId, playerName) {
     if (!roomId || !isHost) return;
     try {
@@ -260,6 +260,39 @@ async function gameUnmutePlayer(playerId, playerName) {
     } catch (e) {
         console.error('gameUnmutePlayer error:', e);
         showToast('Erreur lors du unmute', 'error');
+    }
+}
+
+async function gameKickPlayer(playerId, playerName) {
+    if (!roomId || !isHost) return;
+    try {
+        await db.collection('bingo_rooms').doc(roomId)
+            .collection('players').doc(playerId).delete();
+        showToast(playerName + ' a été expulsé', 'success');
+    } catch (e) {
+        console.error('gameKickPlayer error:', e);
+        showToast('Erreur lors de l\'expulsion', 'error');
+    }
+}
+
+async function gameBanPlayer(playerId, playerName) {
+    if (!roomId || !isHost) return;
+    try {
+        await db.collection('bingo_rooms').doc(roomId).update({
+            bannedUsers: firebase.firestore.FieldValue.arrayUnion(playerId)
+        });
+        // Persist in localStorage
+        const bans = JSON.parse(localStorage.getItem('bingo_bans') || '[]');
+        if (!bans.find(b => b.uid === playerId)) {
+            bans.push({ uid: playerId, name: playerName });
+            localStorage.setItem('bingo_bans', JSON.stringify(bans));
+        }
+        await db.collection('bingo_rooms').doc(roomId)
+            .collection('players').doc(playerId).delete();
+        showToast(playerName + ' a été banni', 'success');
+    } catch (e) {
+        console.error('gameBanPlayer error:', e);
+        showToast('Erreur lors du bannissement', 'error');
     }
 }
 
@@ -320,6 +353,7 @@ function listenToRoom() {
         // Detect host change
         const wasHost = isHost;
         isHost = room.host === currentUser?.uid;
+        roomHostId = room.host;
         if (isHost !== wasHost) {
             applyGameHostUI();
         }
@@ -327,6 +361,7 @@ function listenToRoom() {
         // Update settings in real-time (e.g. chat toggle)
         if (room.settings) {
             roomSettings = room.settings;
+            document.getElementById('statusRoomCode').textContent = roomSettings.hideCode ? (roomSettings.roomName || '••••••••') : (roomSettings.roomName || room.code);
             applyGameChatVisibility();
             // Sync max message length to input
             const chatInput = document.getElementById('chatInput');
@@ -407,6 +442,8 @@ function listenToRoom() {
     });
 }
 
+let gameHostLeftTimeout = null;
+
 function listenToPlayers() {
     playersListener = db.collection('bingo_rooms').doc(roomId)
         .collection('players').onSnapshot(snap => {
@@ -420,8 +457,72 @@ function listenToPlayers() {
                     return;
                 }
             }
+
+            // If all players left, schedule room cleanup
+            if (snap.docs.length === 0) {
+                setTimeout(async () => {
+                    try {
+                        const roomSnap = await db.collection('bingo_rooms').doc(roomId).get();
+                        if (!roomSnap.exists) return;
+                        const playersCheck = await db.collection('bingo_rooms').doc(roomId).collection('players').get();
+                        if (playersCheck.empty) {
+                            const batch = db.batch();
+                            const msgsSnap = await db.collection('bingo_rooms').doc(roomId).collection('messages').get();
+                            msgsSnap.docs.forEach(d => batch.delete(d.ref));
+                            const typSnap = await db.collection('bingo_rooms').doc(roomId).collection('typing').get();
+                            typSnap.docs.forEach(d => batch.delete(d.ref));
+                            batch.delete(db.collection('bingo_rooms').doc(roomId));
+                            await batch.commit();
+                        }
+                    } catch (e) { console.error('game cleanup error:', e); }
+                }, 60000);
+            }
+
+            // Host left detection
+            if (roomHostId && !snap.docs.find(d => d.id === roomHostId)) {
+                handleGameHostLeft(snap.docs);
+            } else {
+                if (gameHostLeftTimeout) { clearTimeout(gameHostLeftTimeout); gameHostLeftTimeout = null; }
+            }
+
             renderPlayersStatus(snap.docs);
         });
+}
+
+async function handleGameHostLeft(playerDocs) {
+    if (gameHostLeftTimeout) return;
+    gameHostLeftTimeout = setTimeout(async () => {
+        try {
+            const roomSnap = await db.collection('bingo_rooms').doc(roomId).get();
+            if (!roomSnap.exists) return;
+            const room = roomSnap.data();
+            const playersSnap = await db.collection('bingo_rooms').doc(roomId).collection('players').get();
+            if (playersSnap.empty) return;
+            const hostStillGone = !playersSnap.docs.find(d => d.id === room.host);
+            if (!hostStillGone) return;
+
+            const sorted = playersSnap.docs
+                .map(d => ({ id: d.id, data: d.data() }))
+                .sort((a, b) => {
+                    const tA = a.data.joinedAt ? (a.data.joinedAt.toMillis ? a.data.joinedAt.toMillis() : a.data.joinedAt) : 0;
+                    const tB = b.data.joinedAt ? (b.data.joinedAt.toMillis ? b.data.joinedAt.toMillis() : b.data.joinedAt) : 0;
+                    return tA - tB;
+                });
+            const newHost = sorted[0];
+            if (newHost) {
+                await db.collection('bingo_rooms').doc(roomId).update({
+                    host: newHost.id,
+                    hostName: newHost.data.name,
+                    hostLeftAt: null
+                });
+                roomHostId = newHost.id;
+                showToast(newHost.data.name + ' est devenu l\'hôte !', 'info');
+            }
+        } catch (e) {
+            console.error('handleGameHostLeft error:', e);
+        }
+        gameHostLeftTimeout = null;
+    }, 60000);
 }
 
 function applyGameHostUI() {
@@ -931,8 +1032,12 @@ function renderPlayersStatus(playerDocs) {
             div.appendChild(bingoSpan);
         }
 
-        // Host actions: mute/unmute
+        // Host actions
         if (isHost && !isMe) {
+            const actions = document.createElement('div');
+            actions.className = 'player-actions';
+
+            // Mute/unmute
             const isMuted = (roomSettings.mutedUsers || []).includes(doc.id);
             const muteBtn = document.createElement('button');
             muteBtn.className = 'player-action-btn mute-btn' + (isMuted ? ' active' : '');
@@ -945,7 +1050,29 @@ function renderPlayersStatus(playerDocs) {
                     showConfirmModal('Rendre ' + p.name + ' muet dans le chat ?', () => gameMutePlayer(doc.id, p.name));
                 }
             });
-            div.appendChild(muteBtn);
+            actions.appendChild(muteBtn);
+
+            // Kick
+            const kickBtn = document.createElement('button');
+            kickBtn.className = 'player-action-btn kick-btn';
+            kickBtn.title = 'Expulser';
+            kickBtn.innerHTML = '<i data-lucide="user-x"></i>';
+            kickBtn.addEventListener('click', () => {
+                showConfirmModal('Expulser ' + p.name + ' de la partie ?', () => gameKickPlayer(doc.id, p.name));
+            });
+            actions.appendChild(kickBtn);
+
+            // Ban
+            const banBtn = document.createElement('button');
+            banBtn.className = 'player-action-btn ban-btn';
+            banBtn.title = 'Bannir';
+            banBtn.innerHTML = '<i data-lucide="ban"></i>';
+            banBtn.addEventListener('click', () => {
+                showConfirmModal('Bannir ' + p.name + ' ?', () => gameBanPlayer(doc.id, p.name));
+            });
+            actions.appendChild(banBtn);
+
+            div.appendChild(actions);
         }
 
         container.appendChild(div);
