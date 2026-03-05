@@ -12,8 +12,9 @@ let calledNumbers = [];
 let roomSettings = { drawMode: 'manual', drawInterval: 10, gridSize: 5, gridCount: 1, patterns: ['line', 'column', 'diagonal'], calledAnimations: true, bingoValidation: 'auto', chatEnabled: true, chatFilter: false, slowMode: 0, maxMessageLength: 200, mutedUsers: [] };
 let roomListener = null;
 let playersListener = null;
-let bingoAlreadyClaimed = false;
-let myClaimedPatterns = [];  // pattern keys already claimed by this player
+let claimingInProgress = false;
+let myClaimedBingos = [];   // keys like "line-0-1" already claimed by this player
+let myBingoCount = 0;
 let gameTypingTimeout = null;
 let gameTypingDocRef = null;
 let isDrawing = false;
@@ -142,6 +143,10 @@ async function initGame() {
 
         const player = playerSnap.data();
         calledNumbers = room.calledNumbers || [];
+
+        // Restore claimed bingos from player doc
+        myClaimedBingos = player.claimedBingos || [];
+        myBingoCount = player.bingoCount || 0;
 
         // Load grids — support map format and legacy single-grid
         const gs = roomSettings.gridSize || 5;
@@ -330,6 +335,9 @@ function listenToRoom() {
             }
         }
 
+        // Update patterns progress
+        renderPatternsProgress(room.completedPatterns || []);
+
         if (newCalled.length > calledNumbers.length) {
             calledNumbers = newCalled;
             const latest = calledNumbers[calledNumbers.length - 1];
@@ -356,35 +364,42 @@ function listenToRoom() {
 
         // Handle pendingBingo
         if (room.pendingBingo) {
-            if (isHost && pendingBingoShownFor !== room.pendingBingo.uid) {
-                pendingBingoShownFor = room.pendingBingo.uid;
+            const pendingId = room.pendingBingo.uid + ':' + (room.pendingBingo.key || '');
+            if (isHost && pendingBingoShownFor !== pendingId) {
+                pendingBingoShownFor = pendingId;
                 const panel = document.getElementById('pendingBingoPanel');
                 if (panel) {
                     panel.classList.remove('hidden');
-                    const pLabel = room.pendingBingo.patternLabel || 'Bingo';
-                    document.getElementById('pendingBingoMsg').textContent = room.pendingBingo.name + ' réclame un Bingo (' + pLabel + ') !';
-                    document.getElementById('btnApproveBingo').onclick = () => approveBingo(room.pendingBingo.uid, room.pendingBingo.name, room.pendingBingo.patternKey, room.pendingBingo.patternLabel);
+                    const pType = room.pendingBingo.patternType || '';
+                    document.getElementById('pendingBingoMsg').textContent = room.pendingBingo.name + ' réclame un Bingo (' + (patternLabels[pType] || pType) + ') !';
+                    document.getElementById('btnApproveBingo').onclick = () => approveBingo(room.pendingBingo.uid, room.pendingBingo.name);
                 }
-            } else if (!isHost && room.pendingBingo.uid !== currentUser?.uid && pendingBingoShownFor !== room.pendingBingo.uid) {
-                pendingBingoShownFor = room.pendingBingo.uid;
-                const pLabel = room.pendingBingo.patternLabel || 'Bingo';
-                showToast(room.pendingBingo.name + ' réclame un Bingo (' + pLabel + ') !', 'info');
+            } else if (!isHost && room.pendingBingo.uid !== currentUser?.uid && pendingBingoShownFor !== pendingId) {
+                pendingBingoShownFor = pendingId;
+                showToast(room.pendingBingo.name + ' réclame un Bingo !', 'info');
             }
         } else if (pendingBingoShownFor) {
-            const wasPending = pendingBingoShownFor;
+            const wasPendingId = pendingBingoShownFor;
             pendingBingoShownFor = null;
             const panel = document.getElementById('pendingBingoPanel');
             if (panel) panel.classList.add('hidden');
-            if (bingoAlreadyClaimed && !isHost && room.status !== 'finished' && wasPending === currentUser?.uid) {
-                bingoAlreadyClaimed = false;
+            // If I was the one who claimed and game isn't finished, my bingo was rejected
+            const wasPendingUid = wasPendingId.split(':')[0];
+            if (!isHost && room.status !== 'finished' && wasPendingUid === currentUser?.uid) {
+                // Reload my claimed bingos from Firestore
+                try {
+                    const mySnap = await db.collection('bingo_rooms').doc(roomId)
+                        .collection('players').doc(currentUser.uid).get();
+                    if (mySnap.exists) {
+                        const myData = mySnap.data();
+                        myClaimedBingos = myData.claimedBingos || [];
+                        myBingoCount = myData.bingoCount || 0;
+                    }
+                } catch(e) { /* ignore */ }
                 showToast('Ton Bingo a été rejeté. Tu peux réessayer !', 'error');
                 updateBingoButton();
             }
         }
-
-        // Handle claimedBingos — notify new claims, sync local state, check if all patterns done
-        const claimed = room.claimedBingos || [];
-        handleClaimedBingosUpdate(claimed, room);
 
         if (room.status === 'finished') {
             handleGameFinished(room);
@@ -580,11 +595,7 @@ async function markCell(gridIndex, r, c) {
 }
 
 // ===== BINGO DETECTION =====
-// Maps internal result types to the pattern keys used in settings
-const PATTERN_TYPE_MAP = { 'row': 'line', 'col': 'column', 'diag': 'diagonal', 'corners': 'corners', 'xPattern': 'xPattern', 'fullCard': 'fullCard' };
-const PATTERN_LABEL = { 'line': 'Ligne', 'column': 'Colonne', 'diagonal': 'Diagonale', 'corners': 'Coins', 'xPattern': 'X', 'fullCard': 'Grille complète' };
-
-function findAllBingosForGrid(marked, patterns) {
+function checkBingoForGrid(marked, patterns) {
     const m = marked;
     const size = roomSettings.gridSize || 5;
     const enabled = patterns || ['line', 'column', 'diagonal'];
@@ -594,7 +605,7 @@ function findAllBingosForGrid(marked, patterns) {
         for (let r = 0; r < size; r++) {
             let full = true;
             for (let c = 0; c < size; c++) { if (!m[r * size + c]) { full = false; break; } }
-            if (full) { results.push({ type: 'row', index: r }); break; }
+            if (full) results.push({ type: 'line', index: r });
         }
     }
 
@@ -602,7 +613,7 @@ function findAllBingosForGrid(marked, patterns) {
         for (let c = 0; c < size; c++) {
             let full = true;
             for (let r = 0; r < size; r++) { if (!m[r * size + c]) { full = false; break; } }
-            if (full) { results.push({ type: 'col', index: c }); break; }
+            if (full) results.push({ type: 'column', index: c });
         }
     }
 
@@ -612,8 +623,8 @@ function findAllBingosForGrid(marked, patterns) {
             if (!m[i * size + i]) d1 = false;
             if (!m[i * size + (size - 1 - i)]) d2 = false;
         }
-        if (d1) results.push({ type: 'diag', index: 0 });
-        else if (d2) results.push({ type: 'diag', index: 1 });
+        if (d1) results.push({ type: 'diagonal', index: 0 });
+        if (d2) results.push({ type: 'diagonal', index: 1 });
     }
 
     if (enabled.includes('corners')) {
@@ -636,39 +647,29 @@ function findAllBingosForGrid(marked, patterns) {
     return results;
 }
 
-// Legacy single-check (used for highlighting)
-function checkBingoForGrid(marked, patterns) {
-    const results = findAllBingosForGrid(marked, patterns);
-    return results.length > 0 ? results[0] : null;
-}
-
-// Find all new (unclaimed) bingos across all grids
-function findNewBingos() {
+function checkBingo() {
     const count = Math.min(myGrids.length, roomSettings.gridCount || 1);
-    const newBingos = [];
+    const unclaimed = [];
     for (let g = 0; g < count; g++) {
-        const results = findAllBingosForGrid(myMarkedGrids[g], roomSettings.patterns);
+        const results = checkBingoForGrid(myMarkedGrids[g], roomSettings.patterns);
         for (const r of results) {
-            const patternKey = PATTERN_TYPE_MAP[r.type];
-            if (!myClaimedPatterns.includes(patternKey)) {
-                newBingos.push({ ...r, gridIndex: g, patternKey });
+            const key = r.type + '-' + r.index + '-' + g;
+            if (!myClaimedBingos.includes(key)) {
+                unclaimed.push({ ...r, gridIndex: g, key: key });
             }
         }
     }
-    return newBingos;
-}
-
-function checkBingo() {
-    const newBingos = findNewBingos();
-    return newBingos.length > 0 ? newBingos[0] : null;
+    return unclaimed;
 }
 
 function updateBingoButton() {
-    const bingo = checkBingo();
+    const unclaimed = checkBingo();
     const btn = document.getElementById('btnBingo');
-    if (bingo && !bingoAlreadyClaimed) {
+    // Clear previous winning highlights
+    document.querySelectorAll('.bingo-cell.winning').forEach(el => el.classList.remove('winning'));
+    if (unclaimed.length > 0 && !claimingInProgress) {
         btn.classList.remove('hidden');
-        highlightWinningCells(bingo);
+        highlightWinningCells(unclaimed[0]);
     } else {
         btn.classList.add('hidden');
     }
@@ -678,11 +679,11 @@ function highlightWinningCells(bingo) {
     const size = roomSettings.gridSize || 5;
     const g = bingo.gridIndex !== undefined ? bingo.gridIndex : 0;
     const cells = [];
-    if (bingo.type === 'row') {
+    if (bingo.type === 'line') {
         for (let c = 0; c < size; c++) cells.push('cell-' + g + '-' + bingo.index + '-' + c);
-    } else if (bingo.type === 'col') {
+    } else if (bingo.type === 'column') {
         for (let r = 0; r < size; r++) cells.push('cell-' + g + '-' + r + '-' + bingo.index);
-    } else if (bingo.type === 'diag') {
+    } else if (bingo.type === 'diagonal') {
         if (bingo.index === 0) for (let i = 0; i < size; i++) cells.push('cell-' + g + '-' + i + '-' + i);
         else for (let i = 0; i < size; i++) cells.push('cell-' + g + '-' + i + '-' + (size - 1 - i));
     } else if (bingo.type === 'corners') {
@@ -704,43 +705,87 @@ function highlightWinningCells(bingo) {
 }
 
 async function claimBingo() {
-    if (bingoAlreadyClaimed) return;
-    const bingo = checkBingo();
-    if (!bingo) {
+    if (claimingInProgress) return;
+    const unclaimed = checkBingo();
+    if (unclaimed.length === 0) {
         showToast('Pas encore de Bingo...', 'error');
         return;
     }
-    bingoAlreadyClaimed = true;
+    claimingInProgress = true;
     document.getElementById('btnBingo').classList.add('hidden');
 
-    const patternKey = bingo.patternKey || PATTERN_TYPE_MAP[bingo.type];
-    const patternLabel = PATTERN_LABEL[patternKey] || patternKey;
+    const bingo = unclaimed[0];
 
     try {
+        myClaimedBingos.push(bingo.key);
+        myBingoCount++;
+
+        // Update player doc
+        await db.collection('bingo_rooms').doc(roomId)
+            .collection('players').doc(currentUser.uid)
+            .update({
+                hasBingo: true,
+                bingoCount: myBingoCount,
+                claimedBingos: myClaimedBingos
+            });
+
+        const patternType = bingo.type;
+
         if (roomSettings.bingoValidation === 'manual') {
             await db.collection('bingo_rooms').doc(roomId).update({
-                pendingBingo: { uid: currentUser.uid, name: currentUser.displayName, patternKey, patternLabel }
+                pendingBingo: { uid: currentUser.uid, name: currentUser.displayName, patternType: patternType, key: bingo.key }
             });
-            showToast('Bingo (' + patternLabel + ') réclamé ! En attente de validation...', 'info');
+            showToast('Bingo réclamé ! En attente de validation...', 'info');
         } else {
-            // Auto-validate: record the bingo directly
-            await db.collection('bingo_rooms').doc(roomId).update({
-                claimedBingos: firebase.firestore.FieldValue.arrayUnion({
-                    uid: currentUser.uid,
-                    name: currentUser.displayName,
-                    patternKey: patternKey,
-                    patternLabel: patternLabel,
-                    timestamp: Date.now()
-                })
-            });
-            myClaimedPatterns.push(patternKey);
-            bingoAlreadyClaimed = false; // allow claiming more patterns
-            updateBingoButton();
+            // Auto validation: add pattern type to completedPatterns and check if game is over
+            await processNewBingo(patternType, currentUser.uid, currentUser.displayName);
         }
     } catch (e) {
         console.error('claimBingo error:', e);
         showToast('Erreur lors du Bingo', 'error');
-        bingoAlreadyClaimed = false;
+        // Rollback local state
+        myClaimedBingos.pop();
+        myBingoCount--;
+    }
+
+    claimingInProgress = false;
+    updateBingoButton();
+}
+
+async function processNewBingo(patternType, claimerUid, claimerName) {
+    const roomRef = db.collection('bingo_rooms').doc(roomId);
+
+    // Use arrayUnion for safe concurrent updates
+    await roomRef.update({
+        completedPatterns: firebase.firestore.FieldValue.arrayUnion(patternType)
+    });
+
+    // Re-read to check if all patterns are now complete
+    const roomSnap = await roomRef.get();
+    const room = roomSnap.data();
+    const completedPatterns = room.completedPatterns || [];
+    const enabledPatterns = roomSettings.patterns || ['line', 'column', 'diagonal'];
+    const allCompleted = enabledPatterns.every(p => completedPatterns.includes(p));
+
+    if (allCompleted && room.status !== 'finished') {
+        // Game over — determine winner(s) with most bingos
+        const playersSnap = await roomRef.collection('players').get();
+        let maxCount = 0;
+        const players = [];
+        playersSnap.docs.forEach(doc => {
+            const p = doc.data();
+            const count = p.bingoCount || 0;
+            players.push({ uid: doc.id, name: p.name, count: count });
+            if (count > maxCount) maxCount = count;
+        });
+        const winners = players.filter(p => p.count === maxCount && maxCount > 0);
+
+        await roomRef.update({
+            status: 'finished',
+            winners: winners
+        });
+    } else if (!allCompleted) {
+        showToast('🎉 BINGO ! (' + (patternLabels[patternType] || patternType) + ') — La partie continue...', 'success');
     }
 }
 
@@ -796,6 +841,26 @@ function animateNewNumber(num) {
     catEl.textContent = category + ' · ' + num;
 
     showToast('Numéro tiré : ' + category + ' ' + num, 'info');
+}
+
+const patternLabels = {
+    line: 'Ligne', column: 'Colonne', diagonal: 'Diagonale',
+    corners: 'Coins', xPattern: 'X', fullCard: 'Carton plein'
+};
+
+function renderPatternsProgress(completedPatterns) {
+    const container = document.getElementById('patternsProgress');
+    if (!container) return;
+    const enabled = roomSettings.patterns || ['line', 'column', 'diagonal'];
+    const completed = completedPatterns || [];
+    container.textContent = '';
+    enabled.forEach(p => {
+        const item = document.createElement('div');
+        item.className = 'pattern-item' + (completed.includes(p) ? ' completed' : '');
+        const icon = completed.includes(p) ? '✅' : '⬜';
+        item.textContent = icon + ' ' + (patternLabels[p] || p);
+        container.appendChild(item);
+    });
 }
 
 function renderCalledNumbers() {
@@ -859,10 +924,10 @@ function renderPlayersStatus(playerDocs) {
             div.appendChild(muteBadge);
         }
 
-        if (p.hasBingo) {
+        if (p.bingoCount > 0) {
             const bingoSpan = document.createElement('span');
             bingoSpan.className = 'ps-bingo';
-            bingoSpan.textContent = 'BINGO!';
+            bingoSpan.textContent = p.bingoCount + ' BINGO' + (p.bingoCount > 1 ? 'S' : '');
             div.appendChild(bingoSpan);
         }
 
@@ -887,63 +952,6 @@ function renderPlayersStatus(playerDocs) {
     });
 
     lucide.createIcons();
-}
-
-// ===== CLAIMED BINGOS HANDLING =====
-let lastClaimedCount = 0;
-
-function handleClaimedBingosUpdate(claimed, room) {
-    // Notify new claims since last update
-    if (claimed.length > lastClaimedCount) {
-        for (let i = lastClaimedCount; i < claimed.length; i++) {
-            const c = claimed[i];
-            if (c.uid !== currentUser?.uid) {
-                showToast(c.name + ' a fait un Bingo (' + c.patternLabel + ') !', 'info');
-            }
-        }
-    }
-    lastClaimedCount = claimed.length;
-
-    // Sync local claimed patterns for current user
-    if (currentUser) {
-        myClaimedPatterns = claimed
-            .filter(c => c.uid === currentUser.uid)
-            .map(c => c.patternKey);
-        bingoAlreadyClaimed = false;
-        updateBingoButton();
-    }
-
-    // Check if all enabled pattern types have been claimed → end game (host only)
-    if (isHost && room.status === 'playing' && claimed.length > 0) {
-        const enabledPatterns = roomSettings.patterns || ['line', 'column', 'diagonal'];
-        const claimedTypes = new Set(claimed.map(c => c.patternKey));
-        const allDone = enabledPatterns.every(p => claimedTypes.has(p));
-        if (allDone) {
-            finishGameWithScores(claimed);
-        }
-    }
-}
-
-async function finishGameWithScores(claimed) {
-    // Count bingos per player
-    const scores = {};
-    for (const c of claimed) {
-        if (!scores[c.uid]) scores[c.uid] = { uid: c.uid, name: c.name, count: 0 };
-        scores[c.uid].count++;
-    }
-    const sorted = Object.values(scores).sort((a, b) => b.count - a.count);
-    const maxCount = sorted[0].count;
-    const winners = sorted.filter(s => s.count === maxCount);
-
-    try {
-        await db.collection('bingo_rooms').doc(roomId).update({
-            status: 'finished',
-            winners: winners.map(w => ({ uid: w.uid, name: w.name, count: w.count })),
-            winnerName: winners.map(w => w.name).join(', ')
-        });
-    } catch (e) {
-        console.error('finishGameWithScores error:', e);
-    }
 }
 
 function handleGameFinished(room) {
@@ -973,60 +981,42 @@ function handleGameFinished(room) {
     const sub = document.getElementById('winnerSubtitle');
 
     const winners = room.winners || [];
-    const claimed = room.claimedBingos || [];
 
-    if (winners.length > 0) {
-        const isWinner = currentUser && winners.some(w => w.uid === currentUser.uid);
-        const winnerNames = winners.map(w => w.name);
-        const winnerCount = winners[0].count;
-
-        if (isWinner) {
+    if (winners.length === 0) {
+        title.textContent = 'Partie terminée !';
+        sub.textContent = 'Aucun gagnant.';
+    } else if (winners.length === 1) {
+        const w = winners[0];
+        const isMe = currentUser && w.uid === currentUser.uid;
+        if (isMe) {
             title.textContent = '';
             title.append('🎊 BINGO ! ');
             const winSpan = document.createElement('span');
             winSpan.textContent = 'Tu as gagné !';
             title.appendChild(winSpan);
-            if (winners.length > 1) {
-                sub.textContent = 'Égalité avec ' + winnerNames.filter(n => n !== currentUser.displayName).join(', ') + ' — ' + winnerCount + ' bingo(s) chacun !';
-            } else {
-                sub.textContent = 'Félicitations, tu as le plus de bingos (' + winnerCount + ') !';
-            }
+            sub.textContent = 'Félicitations ! ' + w.count + ' bingo' + (w.count > 1 ? 's' : '') + ' réussi' + (w.count > 1 ? 's' : '') + ' !';
             launchConfetti();
         } else {
             title.textContent = 'Partie terminée !';
-            if (winners.length > 1) {
-                sub.textContent = 'Égalité ! ' + winnerNames.join(' & ') + ' avec ' + winnerCount + ' bingo(s) chacun ! 🎉';
-            } else {
-                sub.textContent = winnerNames[0] + ' gagne avec ' + winnerCount + ' bingo(s) ! 🎉';
-            }
+            sub.textContent = (w.name || 'Un joueur') + ' gagne avec ' + w.count + ' bingo' + (w.count > 1 ? 's' : '') + ' ! 🎉';
         }
-
-        // Show scoreboard summary
-        if (claimed.length > 0) {
-            const scores = {};
-            for (const c of claimed) {
-                if (!scores[c.uid]) scores[c.uid] = { name: c.name, count: 0 };
-                scores[c.uid].count++;
-            }
-            const sorted = Object.entries(scores).sort((a, b) => b[1].count - a[1].count);
-            const scoreList = sorted.map(([, s], i) => (i + 1) + '. ' + s.name + ' — ' + s.count + ' bingo(s)').join('\n');
-            const scoreEl = document.createElement('p');
-            scoreEl.style.cssText = 'white-space:pre-line;font-size:0.9rem;color:var(--text-muted);margin-bottom:16px;';
-            scoreEl.textContent = scoreList;
-            sub.after(scoreEl);
-        }
-    } else if (currentUser && room.winner === currentUser.uid) {
-        // Legacy fallback (single winner)
-        title.textContent = '';
-        title.append('🎊 BINGO ! ');
-        const winSpan = document.createElement('span');
-        winSpan.textContent = 'Tu as gagné !';
-        title.appendChild(winSpan);
-        sub.textContent = 'Félicitations !';
-        launchConfetti();
     } else {
-        title.textContent = 'Partie terminée !';
-        sub.textContent = (room.winnerName || 'Un joueur') + ' a gagné ! 🎉';
+        // Multiple winners (tie)
+        const isMe = currentUser && winners.some(w => w.uid === currentUser.uid);
+        const names = winners.map(w => w.name).join(', ');
+        const count = winners[0].count;
+        if (isMe) {
+            title.textContent = '';
+            title.append('🎊 Égalité ! ');
+            const winSpan = document.createElement('span');
+            winSpan.textContent = 'Tu fais partie des gagnants !';
+            title.appendChild(winSpan);
+            sub.textContent = names + ' — ' + count + ' bingo' + (count > 1 ? 's' : '') + ' chacun !';
+            launchConfetti();
+        } else {
+            title.textContent = 'Partie terminée — Égalité !';
+            sub.textContent = names + ' gagnent avec ' + count + ' bingo' + (count > 1 ? 's' : '') + ' chacun ! 🎉';
+        }
     }
 
     overlay.classList.add('show');
@@ -1086,18 +1076,20 @@ function renderHeaderAuth(user) {
 }
 
 // ===== BINGO APPROVE / REJECT (host) =====
-async function approveBingo(uid, name, patternKey, patternLabel) {
+async function approveBingo(uid, name) {
     try {
+        const roomSnap = await db.collection('bingo_rooms').doc(roomId).get();
+        const room = roomSnap.data();
+        const patternType = room.pendingBingo?.patternType;
+
+        // Clear pending first
         await db.collection('bingo_rooms').doc(roomId).update({
-            claimedBingos: firebase.firestore.FieldValue.arrayUnion({
-                uid: uid,
-                name: name,
-                patternKey: patternKey,
-                patternLabel: patternLabel || patternKey,
-                timestamp: Date.now()
-            }),
             pendingBingo: firebase.firestore.FieldValue.delete()
         });
+
+        if (patternType) {
+            await processNewBingo(patternType, uid, name);
+        }
     } catch(e) {
         console.error('approveBingo error:', e);
         showToast('Erreur lors de la validation', 'error');
@@ -1106,9 +1098,26 @@ async function approveBingo(uid, name, patternKey, patternLabel) {
 
 async function rejectBingo() {
     try {
+        const roomSnap = await db.collection('bingo_rooms').doc(roomId).get();
+        const room = roomSnap.data();
+        const pendingKey = room.pendingBingo?.key;
+        const pendingUid = room.pendingBingo?.uid;
+
         await db.collection('bingo_rooms').doc(roomId).update({
             pendingBingo: firebase.firestore.FieldValue.delete()
         });
+
+        // Rollback the player's claim
+        if (pendingUid && pendingKey) {
+            const playerRef = db.collection('bingo_rooms').doc(roomId).collection('players').doc(pendingUid);
+            const playerSnap = await playerRef.get();
+            if (playerSnap.exists) {
+                const p = playerSnap.data();
+                const claimed = (p.claimedBingos || []).filter(k => k !== pendingKey);
+                const count = Math.max(0, (p.bingoCount || 1) - 1);
+                await playerRef.update({ claimedBingos: claimed, bingoCount: count, hasBingo: claimed.length > 0 });
+            }
+        }
     } catch(e) {
         console.error('rejectBingo error:', e);
         showToast('Erreur lors du rejet', 'error');

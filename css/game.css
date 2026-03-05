@@ -164,6 +164,26 @@
   margin-top: 4px;
 }
 
+/* ===== PATTERNS PROGRESS ===== */
+.patterns-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pattern-item {
+  font-size: 0.82rem;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--glass-border);
+  color: var(--text-muted);
+}
+.pattern-item.completed {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: var(--success, #10b981);
+}
+
 /* ===== CALLED NUMBERS ===== */
 .called-numbers-list {
   display: flex;
