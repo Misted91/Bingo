@@ -11,3 +11,35 @@ registerStateListener @ auth_impl.ts:674
 onAuthStateChanged @ auth_impl.ts:481
 onAuthStateChanged @ auth.ts:180
 (anonymous) @ game.js:40
+
+
+# firestore
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /bingo_rooms/{roomId} {
+      // Tout utilisateur connecté peut lire une room
+      allow read: if request.auth != null;
+      // Seul un utilisateur connecté peut créer une room
+      allow create: if request.auth != null;
+      // Seul l'hôte peut modifier ou supprimer la room
+      allow update, delete: if request.auth != null
+        && request.auth.uid == resource.data.host;
+
+      match /players/{playerId} {
+        allow read: if request.auth != null;
+        // Un joueur ne peut créer/modifier/supprimer que son propre document
+        allow create, update, delete: if request.auth != null
+          && request.auth.uid == playerId;
+      }
+
+      match /messages/{messageId} {
+        allow read: if request.auth != null;
+        // Un utilisateur connecté peut envoyer un message (son uid doit correspondre)
+        allow create: if request.auth != null
+          && request.auth.uid == request.resource.data.uid;
+      }
+    }
+  }
+}
