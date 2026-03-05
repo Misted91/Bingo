@@ -156,12 +156,6 @@
 }
 .code-toggle-btn:hover { background: rgba(255,255,255,0.12); color: var(--text); }
 .code-toggle-btn .lucide { width: 1.1rem; height: 1.1rem; }
-.code-masked {
-  -webkit-text-fill-color: var(--text-muted) !important;
-  color: var(--text-muted);
-  letter-spacing: 8px !important;
-  font-size: 2.5rem !important;
-}
 
 /* ===== PUBLIC ROOMS ===== */
 .public-rooms-section {
