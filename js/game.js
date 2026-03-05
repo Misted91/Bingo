@@ -21,6 +21,10 @@ let autoDrawCountdown = 0;
 let pendingBingoShownFor = null;
 let lastGameMessageTime = 0;
 let isSpectator = false;
+let spectatedPlayerId = null;
+let spectatedPlayerListener = null;
+let roomHostId = null;
+let gameInitialized = false;
 
 // ===== INIT =====
 const params = new URLSearchParams(window.location.search);
@@ -56,15 +60,9 @@ document.addEventListener('DOMContentLoaded', () => {
 auth.onAuthStateChanged(async (user) => {
     currentUser = user;
     renderHeaderAuth(user);
-    if (user) {
+    if (!gameInitialized) {
+        gameInitialized = true;
         initGame();
-    } else {
-        // Anonymous auth for spectating
-        try {
-            await auth.signInAnonymously();
-        } catch(e) {
-            window.location.href = './index.html';
-        }
     }
 });
 
@@ -91,12 +89,13 @@ async function initGame() {
             return;
         }
         const room = roomSnap.data();
-        isHost = room.host === currentUser.uid;
+        roomHostId = room.host;
+        isHost = currentUser ? room.host === currentUser.uid : false;
         roomSettings = room.settings || roomSettings;
 
         // Check if user is a player in this room
         let playerSnap = null;
-        if (!currentUser.isAnonymous) {
+        if (currentUser && !currentUser.isAnonymous) {
             playerSnap = await db.collection('bingo_rooms').doc(roomId)
                 .collection('players').doc(currentUser.uid).get();
         }
@@ -112,7 +111,7 @@ async function initGame() {
             if (spectatorBanner) spectatorBanner.classList.remove('hidden');
 
             document.getElementById('bingoGridsContainer').innerHTML =
-                '<div class="spectator-placeholder"><i data-lucide="eye"></i><p>Mode Spectateur</p><span>Vous regardez la partie en cours</span></div>';
+                '<div class="spectator-placeholder"><i data-lucide="eye"></i><p>Mode Spectateur</p><span>Cliquez sur un joueur pour voir sa grille</span></div>';
 
             document.getElementById('btnBingo').classList.add('hidden');
             document.getElementById('btnDraw').classList.add('hidden');
@@ -125,12 +124,16 @@ async function initGame() {
             listenToPlayers();
             initGameChat();
 
-            if (currentUser.isAnonymous) {
+            // Disable chat input for non-authenticated spectators
+            if (!currentUser) {
                 const chatInputRow = document.querySelector('#chatPanel .chat-input-row');
                 if (chatInputRow) {
                     chatInputRow.innerHTML = '<p class="chat-spectator-msg"><i data-lucide="lock"></i> Connectez-vous pour chatter</p>';
                 }
             }
+
+            // Default: spectate the host
+            spectatePlayer(roomHostId);
 
             lucide.createIcons();
             return;
@@ -212,6 +215,7 @@ async function quitGame() {
     sessionStorage.removeItem('bingo_session');
     if (roomListener) { roomListener(); roomListener = null; }
     if (playersListener) { playersListener(); playersListener = null; }
+    if (spectatedPlayerListener) { spectatedPlayerListener(); spectatedPlayerListener = null; }
     stopAutoDrawTimer();
     if (gameTypingDocRef) { gameTypingDocRef.delete().catch(() => {}); gameTypingDocRef = null; }
 
@@ -220,10 +224,6 @@ async function quitGame() {
             await db.collection('bingo_rooms').doc(roomId)
                 .collection('players').doc(currentUser.uid).delete();
         } catch(e) { /* ignore */ }
-    }
-
-    if (currentUser && currentUser.isAnonymous) {
-        try { await auth.signOut(); } catch(e) {}
     }
 
     window.location.href = './index.html';
@@ -335,9 +335,22 @@ function listenToRoom() {
             animateNewNumber(latest);
             renderCalledNumbers();
             updateCalledCount();
-            highlightGridCalled();
-            checkAutoMark(latest);
-            updateBingoButton();
+            if (isSpectator) {
+                // Re-render spectated player grid with updated called numbers
+                if (spectatedPlayerId) {
+                    const specSnap = document.querySelector('#bingoGridsContainer .bingo-board');
+                    if (specSnap) {
+                        // Trigger re-render by re-fetching spectated player
+                        db.collection('bingo_rooms').doc(roomId)
+                            .collection('players').doc(spectatedPlayerId).get()
+                            .then(s => { if (s.exists) renderSpectatorGrid(s.data()); });
+                    }
+                }
+            } else {
+                highlightGridCalled();
+                checkAutoMark(latest);
+                updateBingoButton();
+            }
         }
 
         // Handle pendingBingo
@@ -771,6 +784,12 @@ function renderPlayersStatus(playerDocs) {
         const isMe = doc.id === currentUser?.uid;
         const div = document.createElement('div');
         div.className = 'player-status-item';
+        div.dataset.playerId = doc.id;
+
+        // Highlight currently spectated player
+        if (isSpectator && spectatedPlayerId === doc.id) {
+            div.classList.add('spectated');
+        }
 
         const img = document.createElement('img');
         img.src = p.photoURL || 'https://api.dicebear.com/7.x/initials/svg?seed=' + p.name;
@@ -780,6 +799,13 @@ function renderPlayersStatus(playerDocs) {
         const nameSpan = document.createElement('span');
         nameSpan.className = 'ps-name';
         nameSpan.textContent = p.name + (isMe ? ' 👤' : '');
+
+        // Make player name clickable for spectators
+        if (isSpectator) {
+            nameSpan.classList.add('ps-name-clickable');
+            nameSpan.addEventListener('click', () => spectatePlayer(doc.id));
+        }
+
         div.appendChild(nameSpan);
 
         // Muted badge
@@ -849,7 +875,7 @@ function handleGameFinished(room) {
     const title = document.getElementById('winnerTitle');
     const sub = document.getElementById('winnerSubtitle');
 
-    if (room.winner === currentUser.uid) {
+    if (currentUser && room.winner === currentUser.uid) {
         title.textContent = '';
         title.append('🎊 BINGO ! ');
         const winSpan = document.createElement('span');
@@ -903,7 +929,7 @@ function renderHeaderAuth(user) {
         pill.appendChild(name);
 
         area.appendChild(pill);
-    } else if (user && user.isAnonymous) {
+    } else if ((user && user.isAnonymous) || isSpectator) {
         const pill = document.createElement('div');
         pill.className = 'user-pill';
         const icon = document.createElement('i');
@@ -1115,4 +1141,118 @@ function appendGameChatMessage(data, container) {
     div.appendChild(author);
     div.append(data.text);
     container.appendChild(div);
+}
+
+// ===== SPECTATOR GRID VIEWING =====
+function spectatePlayer(playerId) {
+    if (!playerId || !roomId) return;
+
+    // Clean up previous listener
+    if (spectatedPlayerListener) {
+        spectatedPlayerListener();
+        spectatedPlayerListener = null;
+    }
+
+    spectatedPlayerId = playerId;
+
+    // Highlight active player in sidebar
+    document.querySelectorAll('.player-status-item').forEach(el => {
+        el.classList.toggle('spectated', el.dataset.playerId === playerId);
+    });
+
+    // Listen to spectated player's data in real-time
+    spectatedPlayerListener = db.collection('bingo_rooms').doc(roomId)
+        .collection('players').doc(playerId)
+        .onSnapshot(snap => {
+            if (!snap.exists) {
+                document.getElementById('bingoGridsContainer').innerHTML =
+                    '<div class="spectator-placeholder"><i data-lucide="eye"></i><p>Joueur déconnecté</p></div>';
+                lucide.createIcons();
+                return;
+            }
+            const data = snap.data();
+            renderSpectatorGrid(data);
+        }, err => {
+            console.error('spectatePlayer listener error:', err);
+        });
+}
+
+function renderSpectatorGrid(playerData) {
+    const container = document.getElementById('bingoGridsContainer');
+    container.textContent = '';
+
+    const gridsMap = playerData.gridsMap || {};
+    const markedMap = playerData.markedMap || {};
+    const size = roomSettings.gridSize || 5;
+    const count = roomSettings.gridCount || 1;
+    const letters = BINGO_LETTERS.slice(0, size);
+    const hasCenter = size % 2 === 1;
+    const centerR = Math.floor(size / 2);
+    const centerC = Math.floor(size / 2);
+
+    // Player name label
+    const label = document.createElement('div');
+    label.className = 'spectator-grid-label';
+    label.innerHTML = '<i data-lucide="eye"></i> Grille de <strong>' + (playerData.name || 'Joueur') + '</strong>';
+    container.appendChild(label);
+
+    for (let g = 0; g < count; g++) {
+        const grid = gridsMap['g' + g] || [];
+        const marked = markedMap['g' + g] || [];
+        if (grid.length === 0) continue;
+
+        const board = document.createElement('div');
+        board.className = 'bingo-board';
+
+        if (count > 1) {
+            const gridLabel = document.createElement('div');
+            gridLabel.className = 'bingo-board-label';
+            gridLabel.textContent = 'Grille ' + (g + 1);
+            board.appendChild(gridLabel);
+        }
+
+        const headerRow = document.createElement('div');
+        headerRow.className = 'bingo-header-row';
+        headerRow.style.gridTemplateColumns = 'repeat(' + size + ', 1fr)';
+        letters.forEach(l => {
+            const letter = document.createElement('div');
+            letter.className = 'bingo-letter';
+            letter.textContent = l;
+            headerRow.appendChild(letter);
+        });
+        board.appendChild(headerRow);
+
+        const gridEl = document.createElement('div');
+        gridEl.className = 'bingo-grid';
+        gridEl.style.gridTemplateColumns = 'repeat(' + size + ', 1fr)';
+
+        for (let r = 0; r < size; r++) {
+            for (let c = 0; c < size; c++) {
+                const cell = document.createElement('div');
+                cell.className = 'bingo-cell spectator-cell';
+                const idx = r * size + c;
+                const num = grid[idx];
+                const isCenter = hasCenter && r === centerR && c === centerC;
+                const isCalled = num !== 0 && calledNumbers.includes(num);
+                const isMarked = marked[idx];
+
+                if (isCenter) {
+                    cell.classList.add('free');
+                    cell.textContent = 'FREE';
+                } else {
+                    cell.textContent = num;
+                    if (isMarked) {
+                        cell.classList.add('marked');
+                    } else if (isCalled) {
+                        cell.classList.add('called');
+                    }
+                }
+                gridEl.appendChild(cell);
+            }
+        }
+        board.appendChild(gridEl);
+        container.appendChild(board);
+    }
+
+    lucide.createIcons();
 }
