@@ -119,9 +119,13 @@ async function initGame() {
             const markedMap = {};
             myGrids.forEach((g, i) => { gridsMap[String(i)] = g; });
             myMarkedGrids.forEach((m, i) => { markedMap[String(i)] = m; });
+            const updateData = { gridsMap, markedMap };
+            // Remove legacy nested array fields that cause Firestore errors
+            if (player.grids) updateData.grids = firebase.firestore.FieldValue.delete();
+            if (player.markedGrids) updateData.markedGrids = firebase.firestore.FieldValue.delete();
             await db.collection('bingo_rooms').doc(roomId)
                 .collection('players').doc(currentUser.uid)
-                .update({ gridsMap, markedMap });
+                .update(updateData);
         }
 
         document.getElementById('statusRoomCode').textContent = room.code;
