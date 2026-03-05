@@ -12,6 +12,7 @@ let knownPlayerIds = new Set();
 let codeHidden = true;
 let typingTimeout = null;
 let typingDocRef = null;
+let hostLeftTimeout = null;
 
 // Default game settings
 let settingsData = {
@@ -24,7 +25,8 @@ let settingsData = {
     bingoValidation: 'auto',
     visibility: 'private',
     hideCode: true,
-    chatEnabled: true
+    chatEnabled: true,
+    chatFilter: false
 };
 
 // ===== EVENT LISTENERS =====
@@ -159,6 +161,16 @@ function initSettingsUI() {
         saveSettings();
     });
 
+    // Chat filter toggle
+    document.getElementById('chatFilterToggle').addEventListener('click', (e) => {
+        const btn = e.target.closest('.toggle-btn');
+        if (!btn) return;
+        document.querySelectorAll('#chatFilterToggle .toggle-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        settingsData.chatFilter = btn.dataset.value === 'true';
+        saveSettings();
+    });
+
     renderPatternMinis();
 }
 
@@ -264,6 +276,13 @@ function applySettingsToUI(settings) {
         });
         applyChatVisibility();
     }
+
+    // Chat filter
+    if (settings.chatFilter !== undefined) {
+        document.querySelectorAll('#chatFilterToggle .toggle-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.value === String(settings.chatFilter));
+        });
+    }
 }
 
 // ===== VIEW MANAGEMENT =====
@@ -318,6 +337,8 @@ async function createRoom() {
             hostName: currentUser.displayName,
             status: 'waiting',
             calledNumbers: [],
+            bannedUsers: [],
+            hostLeftAt: null,
             settings: { ...settingsData },
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
@@ -376,6 +397,14 @@ async function joinRoom() {
 
         const roomDoc = snap.docs[0];
         const room = roomDoc.data();
+
+        // Check if user is banned from this room
+        if (room.bannedUsers && room.bannedUsers.includes(currentUser.uid)) {
+            showToast('Tu as été banni de cette room.', 'error');
+            btn.disabled = false;
+            setButtonContent(btn, 'log-in', 'Rejoindre');
+            return;
+        }
 
         if (room.status === 'finished') {
             showToast('Cette partie est terminée.', 'error');
@@ -467,6 +496,20 @@ function listenToRoom(roomId) {
             const room = snap.data();
             cachedHost = room.host;
 
+            // Detect if current user got banned
+            if (room.bannedUsers && room.bannedUsers.includes(currentUser?.uid)) {
+                showToast('Tu as été banni de cette room.', 'error');
+                leaveRoomLocal();
+                return;
+            }
+
+            // Update host status dynamically
+            const wasHost = isHost;
+            isHost = room.host === currentUser?.uid;
+            if (isHost !== wasHost) {
+                applyHostUI();
+            }
+
             if (room.status === 'playing') {
                 window.location.href = './game.html?room=' + roomId;
             }
@@ -486,11 +529,80 @@ function listenToRoom(roomId) {
     playersListener = db.collection('bingo_rooms').doc(roomId).collection('players')
         .onSnapshot((snap) => {
             renderPlayers(snap.docs, cachedHost);
-            // If all players left, schedule cleanup (any remaining client handles it)
+
+            // Detect if current user was kicked (no longer in players list)
+            if (currentUser && snap.docs.length > 0 && !snap.docs.find(d => d.id === currentUser.uid)) {
+                showToast('Tu as été expulsé de la room.', 'error');
+                leaveRoomLocal();
+                return;
+            }
+
+            // If all players left, schedule cleanup
             if (snap.docs.length === 0) {
                 scheduleRoomCleanup(roomId);
             }
+
+            // Host left detection: if host not in players, schedule auto-transfer
+            if (cachedHost && !snap.docs.find(d => d.id === cachedHost)) {
+                handleHostLeft(roomId, snap.docs);
+            } else {
+                // Host is present, clear any pending transfer
+                if (hostLeftTimeout) { clearTimeout(hostLeftTimeout); hostLeftTimeout = null; }
+            }
         });
+}
+
+function applyHostUI() {
+    const btnStart = document.getElementById('btnStart');
+    const settingsPanel = document.getElementById('settingsPanel');
+    const waitingMsg = document.getElementById('waitingMsg');
+    if (isHost) {
+        if (btnStart) btnStart.classList.remove('hidden');
+        if (settingsPanel) settingsPanel.classList.remove('settings-disabled');
+        if (waitingMsg) { waitingMsg.textContent = ''; waitingMsg.classList.add('hidden'); }
+    } else {
+        if (btnStart) btnStart.classList.add('hidden');
+        if (settingsPanel) settingsPanel.classList.add('settings-disabled');
+        if (waitingMsg) { waitingMsg.textContent = 'En attente que l\'hôte lance la partie...'; waitingMsg.classList.remove('hidden'); }
+    }
+}
+
+async function handleHostLeft(roomId, playerDocs) {
+    if (hostLeftTimeout) return; // Already scheduled
+    // Wait 60 seconds, then transfer host to the oldest player remaining
+    hostLeftTimeout = setTimeout(async () => {
+        try {
+            const roomSnap = await db.collection('bingo_rooms').doc(roomId).get();
+            if (!roomSnap.exists) return;
+            const room = roomSnap.data();
+            // Re-check if host came back
+            const playersSnap = await db.collection('bingo_rooms').doc(roomId).collection('players').get();
+            if (playersSnap.empty) return;
+            const hostStillGone = !playersSnap.docs.find(d => d.id === room.host);
+            if (!hostStillGone) return;
+
+            // Find next host by joinedAt
+            const sorted = playersSnap.docs
+                .map(d => ({ id: d.id, data: d.data() }))
+                .sort((a, b) => {
+                    const tA = a.data.joinedAt ? (a.data.joinedAt.toMillis ? a.data.joinedAt.toMillis() : a.data.joinedAt) : 0;
+                    const tB = b.data.joinedAt ? (b.data.joinedAt.toMillis ? b.data.joinedAt.toMillis() : b.data.joinedAt) : 0;
+                    return tA - tB;
+                });
+            const newHost = sorted[0];
+            if (newHost) {
+                await db.collection('bingo_rooms').doc(roomId).update({
+                    host: newHost.id,
+                    hostName: newHost.data.name,
+                    hostLeftAt: null
+                });
+                showToast(newHost.data.name + ' est devenu l\'hôte !', 'info');
+            }
+        } catch (e) {
+            console.error('handleHostLeft error:', e);
+        }
+        hostLeftTimeout = null;
+    }, 60000);
 }
 
 function renderPlayers(playerDocs, hostId) {
@@ -506,6 +618,7 @@ function renderPlayers(playerDocs, hostId) {
         const p = doc.data();
         const isThisHost = doc.id === hostId;
         const isNew = !knownPlayerIds.has(doc.id);
+        const isMe = doc.id === currentUser?.uid;
 
         const li = document.createElement('li');
         li.className = 'player-item' + (isNew ? ' player-animate' : '');
@@ -517,7 +630,7 @@ function renderPlayers(playerDocs, hostId) {
 
         const nameSpan = document.createElement('span');
         nameSpan.className = 'player-name';
-        nameSpan.textContent = p.name + (doc.id === currentUser?.uid ? ' (toi)' : '');
+        nameSpan.textContent = p.name + (isMe ? ' (toi)' : '');
         li.appendChild(nameSpan);
 
         if (isThisHost) {
@@ -528,6 +641,44 @@ function renderPlayers(playerDocs, hostId) {
             badge.appendChild(crownIcon);
             badge.append(' Hôte');
             li.appendChild(badge);
+        }
+
+        // Host actions on other players
+        if (isHost && !isMe) {
+            const actions = document.createElement('div');
+            actions.className = 'player-actions';
+
+            // Transfer host button
+            const transferBtn = document.createElement('button');
+            transferBtn.className = 'player-action-btn transfer-btn';
+            transferBtn.title = 'Transférer le rôle d\'hôte';
+            transferBtn.innerHTML = '<i data-lucide="crown"></i>';
+            transferBtn.addEventListener('click', () => {
+                showConfirmModal('Transférer le rôle d\'hôte à ' + p.name + ' ?', () => transferHost(doc.id, p.name));
+            });
+            actions.appendChild(transferBtn);
+
+            // Kick button
+            const kickBtn = document.createElement('button');
+            kickBtn.className = 'player-action-btn kick-btn';
+            kickBtn.title = 'Expulser';
+            kickBtn.innerHTML = '<i data-lucide="user-x"></i>';
+            kickBtn.addEventListener('click', () => {
+                showConfirmModal('Expulser ' + p.name + ' de la room ?', () => kickPlayer(doc.id, p.name));
+            });
+            actions.appendChild(kickBtn);
+
+            // Ban button
+            const banBtn = document.createElement('button');
+            banBtn.className = 'player-action-btn ban-btn';
+            banBtn.title = 'Bannir';
+            banBtn.innerHTML = '<i data-lucide="ban"></i>';
+            banBtn.addEventListener('click', () => {
+                showConfirmModal('Bannir ' + p.name + ' ? Il ne pourra plus rejoindre cette room.', () => banPlayer(doc.id, p.name));
+            });
+            actions.appendChild(banBtn);
+
+            li.appendChild(actions);
         }
 
         list.appendChild(li);
@@ -541,6 +692,51 @@ function renderPlayers(playerDocs, hostId) {
     }
 
     lucide.createIcons();
+}
+
+// ===== HOST / KICK / BAN ACTIONS =====
+async function transferHost(playerId, playerName) {
+    if (!currentRoomId || !isHost) return;
+    try {
+        await db.collection('bingo_rooms').doc(currentRoomId).update({
+            host: playerId,
+            hostName: playerName,
+            hostLeftAt: null
+        });
+        showToast('Rôle d\'hôte transféré à ' + playerName, 'success');
+    } catch (e) {
+        console.error('transferHost error:', e);
+        showToast('Erreur lors du transfert', 'error');
+    }
+}
+
+async function kickPlayer(playerId, playerName) {
+    if (!currentRoomId || !isHost) return;
+    try {
+        await db.collection('bingo_rooms').doc(currentRoomId)
+            .collection('players').doc(playerId).delete();
+        showToast(playerName + ' a été expulsé', 'success');
+    } catch (e) {
+        console.error('kickPlayer error:', e);
+        showToast('Erreur lors de l\'expulsion', 'error');
+    }
+}
+
+async function banPlayer(playerId, playerName) {
+    if (!currentRoomId || !isHost) return;
+    try {
+        // Add to ban list
+        await db.collection('bingo_rooms').doc(currentRoomId).update({
+            bannedUsers: firebase.firestore.FieldValue.arrayUnion(playerId)
+        });
+        // Then remove from players
+        await db.collection('bingo_rooms').doc(currentRoomId)
+            .collection('players').doc(playerId).delete();
+        showToast(playerName + ' a été banni', 'success');
+    } catch (e) {
+        console.error('banPlayer error:', e);
+        showToast('Erreur lors du bannissement', 'error');
+    }
 }
 
 async function startGame() {
@@ -581,6 +777,7 @@ function leaveRoomLocal() {
     if (chatListener) { chatListener(); chatListener = null; }
     if (typingListener) { typingListener(); typingListener = null; }
     if (typingDocRef) { typingDocRef.delete().catch(() => {}); typingDocRef = null; }
+    if (hostLeftTimeout) { clearTimeout(hostLeftTimeout); hostLeftTimeout = null; }
     knownPlayerIds = new Set();
     sessionStorage.removeItem('bingo_session');
     currentRoomId = null;
@@ -880,9 +1077,13 @@ function onChatTyping() {
 async function sendChatMessage() {
     if (!currentRoomId || !currentUser) return;
     const input = document.getElementById('chatInput');
-    const text = input.value.trim();
+    let text = input.value.trim();
     if (!text) return;
     input.value = '';
+    // Apply chat filter if enabled
+    if (settingsData.chatFilter) {
+        text = filterChatMessage(text);
+    }
     // Clear typing indicator on send
     if (typingDocRef) typingDocRef.delete().catch(() => {});
     clearTimeout(typingTimeout);

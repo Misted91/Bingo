@@ -237,6 +237,31 @@
 }
 .host-badge .lucide { width: 0.75rem; height: 0.75rem; }
 
+/* Player action buttons (host only) */
+.player-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: 6px;
+}
+.player-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: rgba(255,255,255,0.06);
+  color: var(--text-muted);
+}
+.player-action-btn .lucide { width: 14px; height: 14px; }
+.player-action-btn:hover { background: rgba(255,255,255,0.12); color: white; }
+.player-action-btn.transfer-btn:hover { background: rgba(251,191,36,0.2); color: #fbbf24; }
+.player-action-btn.kick-btn:hover { background: rgba(239,68,68,0.2); color: #ef4444; }
+.player-action-btn.ban-btn:hover { background: rgba(220,38,38,0.3); color: #dc2626; }
+
 .waiting-actions { display: flex; gap: 12px; justify-content: center; }
 
 /* ===== RESPONSIVE LOBBY ===== */
@@ -259,6 +284,8 @@
   .player-item { padding: 8px 10px; }
   .player-item img { width: 30px; height: 30px; }
   .player-item .player-name { font-size: 0.9rem; }
+  .player-action-btn { width: 26px; height: 26px; }
+  .player-action-btn .lucide { width: 13px; height: 13px; }
 
   .waiting-actions { flex-direction: column; align-items: stretch; }
   .waiting-actions .btn { width: 100%; }
@@ -288,6 +315,9 @@
   .player-item img { width: 28px; height: 28px; }
   .player-item .player-name { font-size: 0.85rem; }
   .player-item .host-badge { font-size: 0.7rem; padding: 2px 8px; }
+  .player-actions { gap: 3px; }
+  .player-action-btn { width: 24px; height: 24px; border-radius: 5px; }
+  .player-action-btn .lucide { width: 12px; height: 12px; }
 }
 
 @media (max-width: 360px) {

@@ -810,9 +810,13 @@ function onGameChatTyping() {
 async function sendGameChatMessage() {
     if (!roomId || !currentUser) return;
     const input = document.getElementById('chatInput');
-    const text = input.value.trim();
+    let text = input.value.trim();
     if (!text) return;
     input.value = '';
+    // Apply chat filter if enabled
+    if (roomSettings.chatFilter) {
+        text = filterChatMessage(text);
+    }
     if (gameTypingDocRef) gameTypingDocRef.delete().catch(() => {});
     clearTimeout(gameTypingTimeout);
     try {

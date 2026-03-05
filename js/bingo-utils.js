@@ -64,3 +64,33 @@ function getBingoCategory(n) {
     const idx = Math.floor((n - 1) / 15);
     return BINGO_LETTERS[idx] || '?';
 }
+
+// ===== CHAT FILTER =====
+const BANNED_WORDS = [
+    // FR
+    'merde', 'putain', 'connard', 'connasse', 'enculé', 'enculer', 'salope',
+    'salaud', 'batard', 'bâtard', 'nique', 'niquer', 'ntm', 'ftg', 'fdp',
+    'pute', 'bordel', 'encule', 'pd', 'tg', 'ta gueule', 'ferme ta gueule',
+    'enfoiré', 'enfoire', 'branleur', 'couille', 'couilles', 'bite', 'bites',
+    'chier', 'pétasse', 'petasse', 'cul', 'bouffon', 'bouffonne', 'abruti',
+    'abrutie', 'débile', 'debile', 'gogol', 'mongol', 'attardé', 'attarde',
+    'taré', 'tare', 'crétin', 'cretin', 'ducon', 'naze', 'tocard',
+    // EN
+    'fuck', 'fucking', 'shit', 'bitch', 'asshole', 'bastard', 'damn',
+    'dick', 'pussy', 'cunt', 'whore', 'slut', 'nigger', 'nigga',
+    'retard', 'retarded', 'stfu', 'wtf', 'lmfao', 'moron', 'idiot',
+    'dumbass', 'jackass', 'motherfucker', 'bullshit'
+];
+
+let _bannedRegex = null;
+function getBannedRegex() {
+    if (!_bannedRegex) {
+        const escaped = BANNED_WORDS.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+        _bannedRegex = new RegExp('\\b(' + escaped.join('|') + ')\\b', 'gi');
+    }
+    return _bannedRegex;
+}
+
+function filterChatMessage(text) {
+    return text.replace(getBannedRegex(), (match) => '*'.repeat(match.length));
+}
