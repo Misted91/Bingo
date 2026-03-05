@@ -218,6 +218,52 @@
 .winner-card p { color: var(--text-muted); margin-bottom: 24px; }
 .winner-card .winner-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
 
+/* ===== MULTI-GRID CONTAINER ===== */
+.bingo-grids-container {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+.bingo-board-label {
+  text-align: center;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-muted);
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+/* ===== AUTO-DRAW INFO ===== */
+.auto-draw-info {
+  margin-top: 14px;
+  padding: 12px 16px;
+  background: rgba(124,58,237,0.1);
+  border: 1px solid rgba(124,58,237,0.25);
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+.auto-draw-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--primary-light);
+  font-weight: 700;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.auto-draw-countdown {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+.auto-draw-countdown strong {
+  color: var(--text);
+  font-size: 1.1rem;
+}
+
 /* ===== CONFETTI ===== */
 .confetti-piece {
   position: fixed;

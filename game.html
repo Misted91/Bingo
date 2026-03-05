@@ -70,14 +70,7 @@
 
                 <!-- Bingo board -->
                 <div class="bingo-section">
-                    <div class="bingo-header-row">
-                        <div class="bingo-letter">B</div>
-                        <div class="bingo-letter">I</div>
-                        <div class="bingo-letter">N</div>
-                        <div class="bingo-letter">G</div>
-                        <div class="bingo-letter">O</div>
-                    </div>
-                    <div class="bingo-grid" id="bingoGrid"></div>
+                    <div id="bingoGridsContainer" class="bingo-grids-container"></div>
                     <div class="bingo-actions">
                         <button class="btn btn-success hidden" id="btnBingo">
                             🎉 BINGO !
@@ -100,6 +93,10 @@
                         <button class="btn btn-primary btn--full-width" id="btnDrawSidebar">
                             <i data-lucide="dices"></i> Tirer un numéro
                         </button>
+                        <div class="auto-draw-info hidden" id="autoDrawInfo">
+                            <div class="auto-draw-label"><i data-lucide="timer"></i> Tirage automatique</div>
+                            <div class="auto-draw-countdown">Prochain tirage dans <strong><span id="autoDrawCountdown">--</span></strong></div>
+                        </div>
                     </div>
 
                     <!-- Called numbers -->

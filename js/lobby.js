@@ -7,6 +7,14 @@ let currentRoomCode = null;
 let roomListener = null;
 let isHost = false;
 
+// Default game settings
+let settingsData = {
+    drawMode: 'manual',
+    drawInterval: 10,
+    gridCount: 1,
+    patterns: ['line', 'column', 'diagonal']
+};
+
 // ===== EVENT LISTENERS =====
 document.addEventListener('DOMContentLoaded', () => {
     lucide.createIcons();
@@ -23,7 +31,140 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('roomCodeInput').addEventListener('input', (e) => {
         e.target.value = e.target.value.toUpperCase();
     });
+
+    initSettingsUI();
 });
+
+// ===== SETTINGS UI =====
+function initSettingsUI() {
+    // Draw mode toggle
+    document.getElementById('drawModeToggle').addEventListener('click', (e) => {
+        const btn = e.target.closest('.toggle-btn');
+        if (!btn) return;
+        document.querySelectorAll('#drawModeToggle .toggle-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        settingsData.drawMode = btn.dataset.value;
+        document.getElementById('intervalGroup').classList.toggle('hidden', settingsData.drawMode !== 'auto');
+        saveSettings();
+    });
+
+    // Draw interval range
+    const rangeInput = document.getElementById('drawIntervalRange');
+    const rangeValue = document.getElementById('intervalValue');
+    rangeInput.addEventListener('input', () => {
+        settingsData.drawInterval = parseInt(rangeInput.value);
+        rangeValue.textContent = rangeInput.value + 's';
+        saveSettings();
+    });
+
+    // Grid count buttons
+    document.getElementById('gridCountBtns').addEventListener('click', (e) => {
+        const btn = e.target.closest('.count-btn');
+        if (!btn) return;
+        document.querySelectorAll('#gridCountBtns .count-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        settingsData.gridCount = parseInt(btn.dataset.count);
+        saveSettings();
+    });
+
+    // Win pattern checkboxes
+    document.getElementById('patternsGrid').addEventListener('change', () => {
+        const checked = [...document.querySelectorAll('#patternsGrid input[name="pattern"]:checked')]
+            .map(cb => cb.value);
+        // Require at least one pattern selected
+        if (checked.length > 0) {
+            settingsData.patterns = checked;
+            saveSettings();
+        } else {
+            // Revert the unchecked box to prevent empty selection
+            const lastChecked = settingsData.patterns[0];
+            const cb = document.querySelector(`#patternsGrid input[value="${lastChecked}"]`);
+            if (cb) cb.checked = true;
+        }
+    });
+
+    renderPatternMinis();
+}
+
+function renderPatternMinis() {
+    // Patterns: which of 25 cells (row-major) are lit
+    const patternCells = {
+        line:     Array.from({length: 25}, (_, i) => i >= 5 && i < 10),   // row 1
+        column:   Array.from({length: 25}, (_, i) => i % 5 === 0),         // col 0
+        diagonal: Array.from({length: 25}, (_, i) => i % 6 === 0),         // main diag
+        corners:  Array.from({length: 25}, (_, i) => [0,4,20,24].includes(i)),
+        fullCard: Array.from({length: 25}, () => true),
+        xPattern: Array.from({length: 25}, (_, i) => i % 6 === 0 || i % 4 === 0 && i > 0 && i < 24)
+    };
+    document.querySelectorAll('.pattern-mini').forEach(el => {
+        const type = el.dataset.pattern;
+        const lit = patternCells[type] || [];
+        el.textContent = '';
+        for (let i = 0; i < 25; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'pm-cell' + (lit[i] ? ' pm-lit' : '');
+            el.appendChild(cell);
+        }
+    });
+}
+
+async function saveSettings() {
+    if (!currentRoomId || !isHost) return;
+    try {
+        await db.collection('bingo_rooms').doc(currentRoomId).update({ settings: settingsData });
+    } catch (e) {
+        console.error('saveSettings error:', e);
+    }
+}
+
+function applySettingsToUI(settings) {
+    if (!settings) return;
+    settingsData = { ...settingsData, ...settings };
+
+    // Draw mode
+    document.querySelectorAll('#drawModeToggle .toggle-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.value === settings.drawMode);
+    });
+    document.getElementById('intervalGroup').classList.toggle('hidden', settings.drawMode !== 'auto');
+
+    // Draw interval
+    if (settings.drawInterval) {
+        document.getElementById('drawIntervalRange').value = settings.drawInterval;
+        document.getElementById('intervalValue').textContent = settings.drawInterval + 's';
+    }
+
+    // Grid count
+    document.querySelectorAll('#gridCountBtns .count-btn').forEach(b => {
+        b.classList.toggle('active', parseInt(b.dataset.count) === settings.gridCount);
+    });
+
+    // Patterns
+    if (settings.patterns) {
+        document.querySelectorAll('#patternsGrid input[name="pattern"]').forEach(cb => {
+            cb.checked = settings.patterns.includes(cb.value);
+        });
+    }
+}
+
+function updateSettingsSummary(settings) {
+    const content = document.getElementById('summaryContent');
+    if (!content || !settings) return;
+
+    const drawModeText = settings.drawMode === 'auto'
+        ? `Automatique (${settings.drawInterval}s)`
+        : 'Manuel';
+    const patternNames = {
+        line: 'Ligne', column: 'Colonne', diagonal: 'Diagonale',
+        corners: '4 Coins', fullCard: 'Carton plein', xPattern: 'Croix (X)'
+    };
+    const patternsText = (settings.patterns || []).map(p => patternNames[p] || p).join(', ');
+
+    content.innerHTML = `
+        <div class="summary-item"><span>Mode de tirage</span><strong>${drawModeText}</strong></div>
+        <div class="summary-item"><span>Grilles par joueur</span><strong>${settings.gridCount}</strong></div>
+        <div class="summary-item"><span>Patterns gagnants</span><strong>${patternsText || '-'}</strong></div>
+    `;
+}
 
 // ===== VIEW MANAGEMENT =====
 function showAuthGate() {
@@ -76,6 +217,7 @@ async function createRoom() {
             host: currentUser.uid,
             status: 'waiting',
             calledNumbers: [],
+            settings: { ...settingsData },
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
@@ -95,6 +237,8 @@ async function createRoom() {
         document.getElementById('displayedCode').textContent = code;
         document.getElementById('btnStart').classList.remove('hidden');
         document.getElementById('waitingMsg').classList.add('hidden');
+        document.getElementById('settingsPanel').classList.remove('hidden');
+        document.getElementById('settingsSummary').classList.add('hidden');
         showWaitingRoom();
         listenToRoom(roomRef.id);
         showToast('Room créée ! Code : ' + code, 'success');
@@ -167,8 +311,14 @@ async function joinRoom() {
         const btnStart = document.getElementById('btnStart');
         if (isHost) {
             btnStart.classList.remove('hidden');
+            document.getElementById('settingsPanel').classList.remove('hidden');
+            document.getElementById('settingsSummary').classList.add('hidden');
+            if (room.settings) applySettingsToUI(room.settings);
         } else {
             btnStart.classList.add('hidden');
+            document.getElementById('settingsPanel').classList.add('hidden');
+            document.getElementById('settingsSummary').classList.remove('hidden');
+            updateSettingsSummary(room.settings || settingsData);
         }
 
         const waitingMsg = document.getElementById('waitingMsg');
@@ -205,6 +355,11 @@ function listenToRoom(roomId) {
 
             if (room.status === 'playing') {
                 window.location.href = './game.html?room=' + roomId;
+            }
+
+            // Update settings summary for non-hosts
+            if (!isHost && room.settings) {
+                updateSettingsSummary(room.settings);
             }
 
             const playersSnap = await db.collection('bingo_rooms').doc(roomId).collection('players').get();
@@ -292,6 +447,8 @@ function leaveRoomLocal() {
     currentRoomId = null;
     currentRoomCode = null;
     isHost = false;
+    document.getElementById('settingsPanel').classList.add('hidden');
+    document.getElementById('settingsSummary').classList.add('hidden');
     showLobby();
 }
 
